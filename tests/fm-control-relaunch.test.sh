@@ -115,6 +115,15 @@ esac
 exit 0
 SH
   chmod +x "$fb/tmux"
+  cat > "$fb/pi" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'Pi options: --help --tui-mode <mode>'
+SH
+  cat > "$fb/pi-signed" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'Pi options: --help --tui-mode <mode>'
+SH
+  chmod +x "$fb/pi" "$fb/pi-signed"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 [ -z "${FM_FAKE_LOCK_WAITING:-}" ] || : > "$FM_FAKE_LOCK_WAITING"
@@ -322,6 +331,38 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   assert_grep "/exit" "$dir/fake/literal" "the previous agent should have been exited"
   assert_grep "encode launch-brief" "$dir/fake/literal" "the replacement should have been launched"
   pass "fm-control relaunch: a same-harness relaunch replaces the agent in the same endpoint and worktree"
+}
+
+test_pi_signed_relaunch_uses_the_recorded_executable() {
+  local dir out rc launch
+  dir=$(new_case pi-signed-executable rl-signed)
+  add_ship_task "$dir" rl-signed pi-signed
+  printf 'pi-signed' > "$dir/fake/becomes"
+
+  out=$(run_control "$dir" rl-signed relaunch --note "resume with the recorded runtime"); rc=$?
+  expect_code 0 "$rc" "a pi-signed relaunch should succeed"$'\n'"$out"
+  launch=$(sed -n '2p' "$dir/fake/literal")
+  assert_contains "$launch" "FM_PI_HARNESS=pi-signed '$dir/fakebin/pi-signed'" \
+    "a pi-signed task must relaunch through the pi-signed executable"
+  assert_not_contains "$launch" "'$dir/fakebin/pi'" \
+    "a pi-signed relaunch must never substitute the unsigned pi executable"
+  assert_not_contains "$launch" " pi --" \
+    "a pi-signed relaunch must never emit a bare pi command"
+  pass "fm-control relaunch: pi-signed preserves its distinct executable identity"
+}
+
+test_relaunch_refuses_an_unknown_recorded_harness() {
+  local dir out rc
+  dir=$(new_case unknown-recorded-harness rl-unknown)
+  add_ship_task "$dir" rl-unknown unknown-harness
+
+  out=$(run_control "$dir" rl-unknown relaunch --note "continue safely"); rc=$?
+  expect_code 1 "$rc" "an unknown recorded harness should refuse relaunch"
+  assert_contains "$out" "records harness 'unknown-harness'" \
+    "the refusal must name the recorded harness"
+  assert_contains "$out" "refuses to guess" \
+    "the refusal must explain that it will not guess a replacement"
+  pass "fm-control relaunch: unknown recorded harnesses refuse without a fallback"
 }
 
 test_relaunch_preserves_durable_task_metadata() {
@@ -1495,6 +1536,8 @@ test_relaunch_moves_a_drifted_item_back_in_flight() {
 }
 
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
+test_pi_signed_relaunch_uses_the_recorded_executable
+test_relaunch_refuses_an_unknown_recorded_harness
 test_relaunch_preserves_durable_task_metadata
 test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context

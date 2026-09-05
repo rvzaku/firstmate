@@ -125,7 +125,7 @@ detect_own() {
       # prefix rather than any exact name. Deliberately anchored, never *muse*, so
       # unrelated commands (musescore, amuse) cannot be misread as this harness.
       muse|muse-bin-*) echo muse; return ;;
-      pi-signed) echo pi; return ;;
+      pi-signed) echo pi-signed; return ;;
       pi) echo pi; return ;;
       node*|python*)
         # Bare interpreter: match the harness name in its script path.

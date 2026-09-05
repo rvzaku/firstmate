@@ -2459,6 +2459,27 @@ EOF
   pass "session start preserves pi-signed primary identity while applying Pi extension guarantees"
 }
 
+test_pi_signed_ancestry_preserves_the_signed_restart_command() {
+  local rec root home fakebin out
+  rec=$(new_world pi-signed-ancestry)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" pi-signed
+
+  out=$(run_named_harness_session_start pi-signed "$home" "$root" "$fakebin:$BASE_PATH")
+
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi-signed" \
+    "ancestry detection must preserve the pi-signed identity"
+  assert_contains "$out" "restart pi-signed so $root/.pi/extensions/fm-primary-turnend-guard.ts and $root/.pi/extensions/fm-primary-pi-watch.ts auto-load" \
+    "ancestry detection must not emit an unsigned pi restart command"
+  assert_not_contains "$out" "restart plain pi so" \
+    "a pi-signed session must never emit the unsigned pi restart command"
+
+  pass "session start: pi-signed ancestry preserves the signed restart command"
+}
+
 test_pi_diagnostic_rejects_stale_loaded_marker() {
   local rec root home fakebin out marker holder_pid
   rec=$(new_world pi-stale-loaded-marker)
@@ -2599,6 +2620,7 @@ test_next_step_sources_x_mode_cadence
 test_next_step_afk_delegates_to_daemon
 test_supervision_block_exactly_one_and_pi_diagnostic
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization
+test_pi_signed_ancestry_preserves_the_signed_restart_command
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
 test_pi_diagnostic_rejects_missing_turnend_guard_marker
