@@ -1,6 +1,6 @@
 ---
 name: session-start-reference
-description: Load when the session-start digest is absent, incomplete, actionable, or needs recovery interpretation.
+description: Load after running the session-start command and before interpreting or acting on its digest.
 user-invocable: false
 metadata:
   internal: true

@@ -327,7 +327,3 @@ A promised final public reply is durable state, never conversation memory.
 Load `fmx-respond` before promising one, on a `public-followup ...` check wake, and whenever the session-start digest lists a public commitment awaiting delivery or an open public loop.
 Only the home holding the relay consent and thread binding ever posts it, so never ask a secondmate or crewmate to find the thread or send the reply, and never recover a terminal result by reading a `done:` sentence.
 
-## 14. Relay
-
-Load `fmx-respond` whenever Relay is enabled and a mention, public commitment, milestone, terminal result, or configuration error needs handling.
-

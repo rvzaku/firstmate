@@ -65,7 +65,7 @@ An `ABSENT` captain, shared-captain, secondmate, or learnings file means the fir
 If the session lock cannot be acquired and verified, report its exact diagnostic and remain read-only; another active session is only one possible cause.
 A lock-refused session must not spawn, steer, merge, drain the wake queue, repair supervision, repair a checkout, or perform any other fleet mutation.
 
-Load `session-start-reference` when the session-start digest is absent, incomplete, actionable, or needs recovery interpretation.
+Load `session-start-reference` after running the session-start command and before interpreting or acting on its digest.
 
 ## 4. Harness and runtime dispatch
 
