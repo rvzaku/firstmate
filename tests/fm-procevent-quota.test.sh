@@ -88,6 +88,45 @@ count=0
 [ ! -f "$QUOTA_AXI_COUNT" ] || read -r count < "$QUOTA_AXI_COUNT"
 count=$((count + 1))
 printf '%s\n' "$count" > "$QUOTA_AXI_COUNT"
+case "${QUOTA_AXI_RECOVERY_CASE:-}" in
+  threshold)
+    case "$count" in 1) remaining=5 ;; 2) remaining=10 ;; *) remaining=11 ;; esac
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}}]}\n' "$remaining"
+    exit 0
+    ;;
+  healthy-cycle)
+    case "$count" in 1) remaining=20 ;; 2) remaining=5 ;; *) remaining=11 ;; esac
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}}]}\n' "$remaining"
+    exit 0
+    ;;
+  exhausted)
+    if [ "$count" -eq 1 ]; then
+      printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":0,"runway":{"status":"exhausted_now"}}]}}]}\n'
+      exit 0
+    fi
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":11,"runway":{"status":"through_reset"}}]}}]}\n'
+    exit 0
+    ;;
+  unknown)
+    if [ "$count" -eq 2 ]; then
+      printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"unknown","effectiveAvailability":[]}}]}\n'
+      exit 0
+    fi
+    case "$count" in 1) remaining=5 ;; *) remaining=11 ;; esac
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}}]}\n' "$remaining"
+    exit 0
+    ;;
+  accounts)
+    case "$count" in 1) first=5; second=5 ;; 2) first=11; second=5 ;; *) first=11; second=11 ;; esac
+    printf '{"schemaVersion":6,"providers":[{"provider":"codex","accountKey":"home","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}},{"provider":"codex","accountKey":"work","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}}]}\n' "$first" "$second"
+    exit 0
+    ;;
+  providers)
+    case "$count" in 1) codex=5 ;; *) codex=11 ;; esac
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}},{"provider":"cursor","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":5,"runway":{"status":"through_reset"}}]}}]}\n' "$codex"
+    exit 0
+    ;;
+esac
 if [ "${QUOTA_AXI_UNKNOWN_FIRST:-0}" = 1 ] && [ "$count" -eq 1 ]; then
   printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"unknown","effectiveAvailability":[]}}]}\n'
   exit 0
@@ -126,7 +165,7 @@ ok() { printf 'ok - %s\n' "$1"; }
 if help=$("$BIN/fm-procevent-quota.sh" --help 2>&1); then
   fail "help unexpectedly exited zero"
 fi
-printf '%s\n' "$help" | grep -Fq 'fm-procevent-quota.sh retire [--provider <provider>]' \
+printf '%s\n' "$help" | grep -Fq 'fm-procevent-quota.sh retire [--recovery] [--provider <provider>]' \
   || fail "help omitted the retire usage"
 if printf '%s\n' "$help" | grep -Fq 'set -u'; then
   fail "help leaked executable source"
@@ -283,5 +322,56 @@ out=$(QUOTA_AXI_KNOWN_UNKNOWN_FIRST=1 QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$P
 printf '%s\n' "$out" | grep -qx 'status: exhausted' || fail "known semantics with unknown headroom did not continue polling"
 printf '%s\n' "$out" | grep -qx 'condition_polls: 2' || fail "known semantics with unknown headroom stopped early"
 ok "poll preserves unknown headroom under known semantics"
+
+for scenario in threshold healthy-cycle exhausted unknown accounts providers; do
+  rm -f "$COUNT"
+  out=$(QUOTA_AXI_RECOVERY_CASE="$scenario" QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+    "$BIN/fm-procevent-quota.sh" poll --recovery --interval 0.01 --threshold 10 --timeout 1)
+  printf '%s\n' "$out" | grep -qx 'status: recovered' || fail "$scenario did not report recovery"
+  printf '%s\n' "$out" | grep -qx 'recovered_provider: codex' || fail "$scenario did not identify the recovered provider"
+  case "$scenario" in threshold|healthy-cycle|unknown|accounts) polls=3 ;; exhausted|providers) polls=2 ;; esac
+  printf '%s\n' "$out" | grep -qx "condition_polls: $polls" || fail "$scenario fired before recovery was proven"
+  detail=$(printf '%s\n' "$out" | sed -n 's/^detail: //p')
+  printf '%s\n' "$detail" | jq -e 'all((.summary // [.])[]; .best.effectivePercentRemaining > 10)' >/dev/null \
+    || fail "$scenario reported a provider with a below-threshold account"
+done
+ok "recovery requires a known above-threshold transition for every provider account"
+
+out=$(QUOTA_AXI_MALFORMED=types QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+  "$BIN/fm-procevent-quota.sh" poll --recovery --interval 0.01 --threshold 10 --timeout 1)
+printf '%s\n' "$out" | grep -qx 'status: error' || fail "malformed quota was treated as recovery"
+printf '%s\n' "$out" | grep -qx 'condition_polls: 1' || fail "malformed recovery snapshot did not stop immediately"
+ok "recovery refuses malformed quota snapshots"
+
+[ "$("$BIN/fm-procevent-quota.sh" source-id --recovery --provider codex)" = quota.recovery-codex ] \
+  || fail "recovery provider source id was not distinct"
+[ "$("$BIN/fm-procevent-quota.sh" source-id --recovery)" = quota.recovery ] \
+  || fail "aggregate recovery source id was not distinct"
+if err=$(QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+  "$BIN/fm-procevent-quota.sh" arm --recovery --threshold 100 2>&1); then
+  fail "unreachable recovery threshold unexpectedly armed"
+fi
+[ "$err" = "error: --recovery needs a threshold below 100" ] || fail "unreachable threshold returned: $err"
+ok "recovery source identities are independent and unreachable thresholds refuse"
+
+home="$LAB/recovery-home"
+claim_root="$LAB/claims"
+rm -f "$COUNT"
+out=$(FM_HOME="$home" FM_PROCEVENT_CLAIM_ROOT="$claim_root" \
+  QUOTA_AXI_RECOVERY_CASE=providers QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+  "$BIN/fm-procevent-quota.sh" arm --recovery --provider codex --interval 0.01 --threshold 10)
+printf '%s\n' "$out" | grep -qx 'armed: quota.recovery-codex' || fail "recovery arm registered the wrong source"
+FM_HOME="$home" FM_PROCEVENT_CLAIM_ROOT="$claim_root" \
+  QUOTA_AXI_RECOVERY_CASE=providers QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+  "$BIN/fm-procevent.sh" start quota.recovery-codex >/dev/null || fail "recovery runner failed"
+result=$(find "$home/state/procevent-inbox" -name 'quota.recovery-codex.*.result' -print -quit)
+[ -n "$result" ] || fail "runner did not capture a recovery result"
+[ "$("$BIN/fm-procevent-quota.sh" classify "$result")" = recovered ] || fail "captured recovery did not classify"
+grep -q 'procevent quota quota.recovery-codex' "$home/state/.wake-queue" || fail "runner did not publish the recovery wake"
+sequence=$(basename "$result" | sed -n 's/^quota\.recovery-codex\.\([0-9][0-9]*\)\.result$/\1/p')
+[ -n "$sequence" ] || fail "captured recovery result lacks a sequence"
+FM_HOME="$home" FM_PROCEVENT_CLAIM_ROOT="$claim_root" \
+  "$BIN/fm-procevent.sh" handled quota.recovery-codex "$sequence" >/dev/null || fail "recovery acknowledgement failed"
+ok "recovery arm, runner, wake, classification, and acknowledgement use the existing source path"
 
 printf '# all fm-procevent-quota tests passed\n'

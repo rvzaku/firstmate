@@ -1,32 +1,36 @@
 #!/usr/bin/env bash
-# Quota-exhaustion process-event adapter.
+# Quota process-event adapter.
 #
 # Usage:
-#   fm-procevent-quota.sh arm [--interval <secs>] [--threshold <percent>] [--provider <provider>]
-#   fm-procevent-quota.sh poll [--interval <secs>] [--threshold <percent>] [--provider <provider>] [--timeout <secs>]
+#   fm-procevent-quota.sh arm [--recovery] [--interval <secs>] [--threshold <percent>] [--provider <provider>]
+#   fm-procevent-quota.sh poll [--recovery] [--interval <secs>] [--threshold <percent>] [--provider <provider>] [--timeout <secs>]
 #   fm-procevent-quota.sh classify <result-file>
 #   fm-procevent-quota.sh terminal <result-file>
-#   fm-procevent-quota.sh source-id
-#   fm-procevent-quota.sh retire [--provider <provider>]
+#   fm-procevent-quota.sh source-id [--recovery] [--provider <provider>]
+#   fm-procevent-quota.sh retire [--recovery] [--provider <provider>]
 #
 # arm        Register a recurring quota-axi --json poll that wakes firstmate
 #            when the tracked provider's effectivePercentRemaining drops below
 #            <threshold> (default 10%) or when its runway.status becomes
-#            exhausted_now. The condition is deterministic, the action is only
-#            the durable `check: procevent:quota:<seq>` wake, and the watch is
+#            exhausted_now. With --recovery it instead wakes after a provider
+#            observed below the threshold or exhausted is known above the
+#            threshold again on every reported scope. The condition is
+#            deterministic, the action is only
+#            the durable `check: procevent quota <source-id> <seq>` wake, and the watch is
 #            registered through `bin/fm-procevent.sh register`.
 # poll       The blocking child the generic runner executes; never run this
 #            directly in a conversational turn. It polls `quota-axi --json`
-#            until quota drops below the threshold or an error stops the watch.
-# classify   Print the captured outcome class: low, exhausted, error, or unknown.
+#            until its condition is met or an error stops the watch.
+# classify   Print the captured outcome class: low, exhausted, recovered, error, or unknown.
 # terminal   Every quota poll is terminal because the source fires at most once.
 # source-id  Print the canonical source id.
 # retire     Stop the aggregate watch, or the matching provider watch when
 #            --provider is supplied, and retire the registration.
 #
 # The canonical source id is `quota` for the aggregate tracked provider.
-# A provider named with --provider sets the tracked provider and the source id
-# becomes `quota-<provider>`.
+# A provider named with --provider makes it `quota-<provider>`.
+# Recovery sources use `quota.recovery` and `quota.recovery-<provider>` so both
+# watch types can run independently.
 #
 # Snapshots may be quota-axi schema 5 or 6 (bin/fm-quota-axi-lib.sh owns the
 # validator). Both watches read every matching account row independently,
@@ -57,6 +61,7 @@ SOURCE_ID_BASE=quota
 
 CANONICAL_SOURCE_ID=
 PROVIDER=
+RECOVERY=0
 
 usage() {
   awk '
@@ -81,6 +86,12 @@ resolve_provider() {
   fm_procevent_source_id_valid "$CANONICAL_SOURCE_ID" || die "source id is not path-safe: $CANONICAL_SOURCE_ID"
 }
 
+resolve_source() {
+  SOURCE_ID_BASE=quota
+  [ "$RECOVERY" = 0 ] || SOURCE_ID_BASE=quota.recovery
+  resolve_provider "${1-}"
+}
+
 positive_number() {
   local n=${1-}
   local LC_ALL=C
@@ -95,6 +106,10 @@ valid_percent() {
   local LC_ALL=C
   [[ "$n" =~ ^[0-9]+(\.[0-9]+)?$ ]] || return 1
   jq -en --arg n "$n" '($n | tonumber) <= 100' >/dev/null 2>&1
+}
+
+valid_recovery_threshold() {
+  valid_percent "$1" && jq -en --arg n "$1" '($n | tonumber) < 100' >/dev/null 2>&1
 }
 
 # quota_json [timeout]
@@ -163,28 +178,56 @@ details() {
   ' 2>/dev/null
 }
 
+# A recovery needs positive evidence for every reported scope of this provider.
+# Unknown, missing, and exactly-at-threshold scopes cannot prove recovery.
+recovery_provider_status() {
+  local json=$1 provider=$2 threshold=$3
+  printf '%s\n' "$json" | jq -r --arg provider "$provider" --arg threshold "$threshold" '
+    [.providers[] | select(.provider == $provider)] as $rows |
+    [$rows[] | .quotaSemantics.effectiveAvailability[]?] as $availability |
+    if ($availability | length) == 0 then "unknown"
+    elif any($availability[]; (.runway.status // "") == "exhausted_now") then "exhausted"
+    elif any($availability[]; .status == "known" and .effectivePercentRemaining < ($threshold | tonumber)) then "low"
+    elif all($rows[]; .quotaSemantics.status == "known") and
+         all($availability[]; .status == "known" and .effectivePercentRemaining > ($threshold | tonumber)) then "healthy"
+    else "unknown"
+    end
+  ' 2>/dev/null || printf 'error\n'
+}
+
 cmd_source_id() {
-  resolve_provider "${1-}"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --recovery) RECOVERY=1; shift ;;
+      --provider) [ -n "${2-}" ] || die "--provider needs a value"; PROVIDER=$2; shift 2 ;;
+      *) [ -z "$PROVIDER" ] || usage; PROVIDER=$1; shift ;;
+    esac
+  done
+  resolve_source "$PROVIDER"
   printf '%s\n' "$CANONICAL_SOURCE_ID"
 }
 
 cmd_arm() {
   local interval=$DEFAULT_INTERVAL threshold=$DEFAULT_THRESHOLD
+  local -a poll_args=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --recovery) RECOVERY=1; shift ;;
       --interval)  positive_number "${2-}" || die "--interval needs a positive number"; interval=$2; shift 2 ;;
       --threshold) valid_percent "${2-}" || die "--threshold needs a percent 0-100"; threshold=$2; shift 2 ;;
-      --provider)  [ -n "${2-}" ] || die "--provider needs a value"; resolve_provider "$2"; shift 2 ;;
+      --provider)  [ -n "${2-}" ] || die "--provider needs a value"; PROVIDER=$2; shift 2 ;;
       *) usage ;;
     esac
   done
-  resolve_provider "$PROVIDER"
+  resolve_source "$PROVIDER"
+  [ "$RECOVERY" = 0 ] || valid_recovery_threshold "$threshold" || die "--recovery needs a threshold below 100"
   fm_quota_axi_compatible 5 >/dev/null 2>&1 || die "quota-axi is missing or below the compatibility floor"
   local timeout
   timeout=$(perl -e 'print int($ARGV[0] * 0.8 + 0.5)' "$interval") || timeout=30
   [ "$timeout" -ge 5 ] || timeout=5
+  [ "$RECOVERY" = 0 ] || poll_args+=(--recovery)
   "$SCRIPT_DIR/fm-procevent.sh" register quota "$CANONICAL_SOURCE_ID" \
-    -- "$SCRIPT_DIR/fm-procevent-quota.sh" poll --interval "$interval" --threshold "$threshold" --provider "$PROVIDER" --timeout "$timeout" || exit 1
+    -- "$SCRIPT_DIR/fm-procevent-quota.sh" poll "${poll_args[@]}" --interval "$interval" --threshold "$threshold" --provider "$PROVIDER" --timeout "$timeout" || exit 1
   printf 'armed: %s\n' "$CANONICAL_SOURCE_ID"
   printf 'provider: %s\n' "${PROVIDER:-(aggregate)}"
   printf 'threshold: %s%%\n' "$threshold"
@@ -198,6 +241,7 @@ cmd_poll() {
   local interval=$DEFAULT_INTERVAL threshold=$DEFAULT_THRESHOLD timeout=
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --recovery) RECOVERY=1; shift ;;
       --interval)  [ "$#" -ge 2 ] || die "--interval needs a positive number"; interval=$2; shift 2 ;;
       --threshold) [ "$#" -ge 2 ] || die "--threshold needs a percent 0-100"; threshold=$2; shift 2 ;;
       --provider)  [ "$#" -ge 2 ] || die "--provider needs a value"; PROVIDER=$2; shift 2 ;;
@@ -207,11 +251,13 @@ cmd_poll() {
   done
   positive_number "$interval" || die "--interval needs a positive number"
   valid_percent "$threshold" || die "--threshold needs a percent 0-100"
+  [ "$RECOVERY" = 0 ] || valid_recovery_threshold "$threshold" || die "--recovery needs a threshold below 100"
   [ -z "$timeout" ] || positive_int "$timeout" || die "--timeout needs a positive integer"
-  resolve_provider "$PROVIDER"
-  local json detail status polls=0
+  resolve_source "$PROVIDER"
+  local json detail status polls=0 provider seen_low='|' recovered='' providers=''
   while :; do
     polls=$((polls + 1))
+    status=unknown
     if ! json=$(quota_json "${timeout:-}"); then
       printf 'quota: %s\n' "$CANONICAL_SOURCE_ID"
       printf 'status: error\n'
@@ -219,15 +265,43 @@ cmd_poll() {
       printf 'condition_polls: %s\n' "$polls"
       exit 0
     fi
-    status=$(condition_status "$json" "$PROVIDER" "$threshold")
+    if [ "$RECOVERY" = 1 ]; then
+      printf '%s\n' "$json" | fm_quota_json_valid || status=error
+      if [ "${status:-}" != error ]; then
+        providers=$(printf '%s\n' "$json" | jq -r --arg provider "$PROVIDER" '
+          [.providers[] | select($provider == "" or .provider == $provider) | .provider] | unique[]')
+        while IFS= read -r provider; do
+          [ -n "$provider" ] || continue
+          status=$(recovery_provider_status "$json" "$provider" "$threshold")
+          case "$status" in
+            low|exhausted)
+              case "$seen_low" in *"|$provider|"*) : ;; *) seen_low="$seen_low$provider|" ;; esac
+              ;;
+            healthy)
+              case "$seen_low" in *"|$provider|"*) recovered=$provider; break ;; esac
+              ;;
+            error) break ;;
+          esac
+        done <<< "$providers"
+        if [ -n "$recovered" ]; then
+          status=recovered
+        elif [ "$status" != error ]; then
+          sleep "$interval"
+          continue
+        fi
+      fi
+    else
+      status=$(condition_status "$json" "$PROVIDER" "$threshold")
+    fi
     case "$status" in
       healthy) sleep "$interval"; continue ;;
-      low|exhausted) : ;;
+      low|exhausted|recovered) : ;;
       *) status=error ;;
     esac
-    detail=$(details "$json" "$PROVIDER")
+    detail=$(details "$json" "${recovered:-$PROVIDER}")
     printf 'quota: %s\n' "$CANONICAL_SOURCE_ID"
     printf 'status: %s\n' "$status"
+    [ -z "$recovered" ] || printf 'recovered_provider: %s\n' "$recovered"
     printf 'detail: %s\n' "$detail"
     printf 'condition_polls: %s\n' "$polls"
     exit 0
@@ -243,7 +317,7 @@ cmd_classify() {
     /^status: / { sub(/^status: /, ""); print; exit }
   ' "$file")
   case "$status" in
-    low|exhausted|error) printf '%s\n' "$status" ;;
+    low|exhausted|recovered|error) printf '%s\n' "$status" ;;
     *) printf 'unknown\n' ;;
   esac
 }
@@ -259,12 +333,13 @@ cmd_retire() {
   local id provider=
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --recovery) RECOVERY=1; shift ;;
       --provider) [ -n "${2-}" ] || die "--provider needs a value"; provider=$2; shift 2 ;;
       -*) usage ;;
       *) [ -z "$provider" ] || usage; provider=$1; shift ;;
     esac
   done
-  resolve_provider "$provider"
+  resolve_source "$provider"
   id=$CANONICAL_SOURCE_ID
   "$SCRIPT_DIR/fm-procevent.sh" retire "$id"
 }
@@ -274,7 +349,7 @@ case "${1-}" in
   poll)      shift; cmd_poll "$@" ;;
   classify)  shift; cmd_classify "$@" ;;
   terminal)  shift; cmd_terminal "$@" ;;
-  source-id) shift; cmd_source_id "${1-}" ;;
+  source-id) shift; cmd_source_id "$@" ;;
   retire)    shift; cmd_retire "$@" ;;
   ''|-h|--help|help) usage ;;
   *) die "unknown command: $1" ;;
