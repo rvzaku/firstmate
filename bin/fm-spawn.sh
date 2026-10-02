@@ -531,6 +531,28 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+ensure_spawn_status_file() {
+  local status_file="$STATE/$ID.status"
+  if [ -L "$status_file" ]; then
+    echo "error: task status path is a symlink: $status_file" >&2
+    return 1
+  fi
+  if [ -e "$status_file" ]; then
+    [ -f "$status_file" ] && [ -r "$status_file" ] && [ -w "$status_file" ] || {
+      echo "error: task status path is not a readable and writable file: $status_file" >&2
+      return 1
+    }
+    return 0
+  fi
+  if ! (umask 077; set -C; : >"$status_file") 2>/dev/null; then
+    if [ -f "$status_file" ] && [ ! -L "$status_file" ] &&
+      [ -r "$status_file" ] && [ -w "$status_file" ]; then
+      return 0
+    fi
+    echo "error: task status file could not be created: $status_file" >&2
+    return 1
+  fi
+}
 # shellcheck source=bin/fm-config-inherit-lib.sh
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
 if ! LAUNCH_ENV_ENABLED=$(fm_config_source_present "$CONFIG/launch-env-allowlist"); then
@@ -1152,6 +1174,7 @@ spawn_remote_secondmate() {
     echo "remote_target=$remote_target"
     [ -z "$remote_recorded_traceparent" ] || echo "traceparent=$remote_recorded_traceparent"
   } >"$tmp"
+  ensure_spawn_status_file || return 1
   if ! fm_backlog_atomic_transition publish "$tmp" "$meta" "task record" "$STATE"; then
     if [ "$SPAWN_TASK_SET_LOCK_HELD" = 1 ]; then
       SPAWN_TASK_SET_LOCK_HELD=0
@@ -4953,6 +4976,7 @@ preserve_relaunch_meta() {
   echo "error: task record for $ID could not be prepared at $SPAWN_META_PATH" >&2
   exit 1
 }
+ensure_spawn_status_file || exit 1
 if [ "$RELAUNCH" -eq 0 ]; then
   if ! fm_backlog_atomic_transition publish "$SPAWN_META_TMP" "$STATE/$ID.meta" "task record" "$STATE"; then
     echo "error: task record for $ID could not be published ($FM_BACKLOG_TRANSITION_ERROR)" >&2

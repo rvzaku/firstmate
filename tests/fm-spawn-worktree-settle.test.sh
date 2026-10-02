@@ -129,6 +129,10 @@ test_single_stale_first_read_is_not_accepted() {
   assert_contains "$out" "spawned $id" "spawn did not report success"
   assert_grep "worktree=$WT_DIR" "$HOME_DIR/state/$id.meta" \
     "meta did not record the settled worktree"
+  [ -f "$HOME_DIR/state/$id.status" ] && [ ! -L "$HOME_DIR/state/$id.status" ] \
+    || fail "successful spawn did not create a readable status file beside its task record"
+  [ ! -s "$HOME_DIR/state/$id.status" ] \
+    || fail "successful spawn status file was not empty"
   assert_no_grep "worktree=$STALE_DIR" "$HOME_DIR/state/$id.meta" \
     "meta wrongly recorded the transient stale path as the worktree"
   pass "a single transient stale pane_current_path read is not accepted as the worktree"
