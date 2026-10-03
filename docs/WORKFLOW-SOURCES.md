@@ -53,16 +53,17 @@ An owner is the current place for the practice. A gap names the tracked backlog 
 | Use medium for defined work and xhigh for ambiguity | `.agents/skills/harness-adapters/references/common/model-and-effort.md`. |
 | Keep skills small, triggered, and composable | `.agents/skills/` descriptions and `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
 | Define observable success and use the real feedback loop | `AGENTS.md`, `bin/fm-brief.sh`, and `bin/fm-dod-lib.sh`. |
+| Clarify unclear intent and record the answer before building | `bin/fm-brief.sh` and `bin/fm-dod-lib.sh`; `bin/fm-spawn.sh` refuses a new ship brief without an `Intent check:` line. |
 | Reproduce a bug before diagnosing its cause | `.agents/skills/diagnostic-reasoning/SKILL.md`. |
 | Use small interfaces and test behavior through them | `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
 | Keep work in complete, verifiable slices with explicit blockers | `AGENTS.md` decomposition guidance and the existing backlog dependency model. |
-| Sample landed work and queue patterns for review | Gap: `fm-gardener-backpass`. |
+| Sample landed work and queue patterns for review | `bin/fm-gardener.sh` samples the newest closed-task pipeline findings into a ranked candidate-cluster report that firstmate reviews before filing any lint-rule task. |
 | Mine correction transcripts for workflow updates | Gap: `fm-align-maintenance-loop`. |
 | Trigger bounded triage from external signals | Existing process-event sources. |
 | Fuzz per-PR verification with real-app verifier agents | The selected no-mistakes path. |
 | Maintain isolated work, compact tool output, and validation gates | `AGENTS.md`, `bin/fm-spawn.sh`, and the selected delivery path. Compaction advice review gap: `fm-align-maintenance-loop`. |
 | Propose memory changes from corroborated evidence and validate separately | Gap: `fm-align-maintenance-loop` and `fm-backpass-memory`. Human preferences remain protected. |
-| Remove workarounds and maintain a preferred pattern | Gap: `fm-gardener-backpass`; correction-to-check handoff: `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
+| Remove workarounds and maintain a preferred pattern | `.agents/skills/firstmate-coding-guidelines/SKILL.md` owns the correction-to-check handoff, and `bin/fm-gardener.sh` reports recurring finding clusters as candidates for a cause review. |
 | Use measured baselines and bounded experiment records | The task specification and selected validation owner; apply only to authorized experiment work. |
 
 ## Trust order

@@ -566,6 +566,7 @@ Exercise Antigravity dispatch.
 
 ## Firstmate spec
 Verify launch and delivery behavior.
+Intent check: clear: the fixture defines the expected launch behavior.
 Observable result: the expected Antigravity worker launch is visible.
 Verification command: run the focused Antigravity harness test.
 EOF

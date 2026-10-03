@@ -414,6 +414,24 @@ EOF
   pass "new ship brief requires observable verification"
 }
 
+test_new_ship_brief_requires_intent_check() {
+  local brief value
+  brief="$TMP_ROOT/ship-intent-brief.md"
+  for value in '' 'clear:' 'grilled: ' 'unclear: ask later' 'clear: {reason}' 'grilled: <questions and answers>' 'clear: TBD' 'grilled: done' 'grilled: Q: Which scope?' 'grilled: Q: A: Only scope' 'grilled: A: only scope Q: which?'; do
+    printf '# Task\n## Firstmate spec\nIntent check: %s\n' "$value" > "$brief"
+    if fm_brief_ship_intent_valid "$brief"; then fail "unfinished intent check was accepted: $value"; fi
+  done
+  printf '# Task\n## Firstmate spec\nObservable result: visible outcome\n' > "$brief"
+  if fm_brief_ship_intent_valid "$brief"; then fail "missing intent check was accepted"; fi
+  for value in 'clear: the request defines the outcome and scope.' 'clear: emit <READY> after setup' 'grilled: Q: Which scope? A: Only the intake gate.'; do
+    printf '# Task\n## Firstmate spec\nIntent check: %s\n' "$value" > "$brief"
+    fm_brief_ship_intent_valid "$brief" || fail "completed intent check was refused: $value"
+  done
+  printf 'Intent check: clear: another reason\n' >> "$brief"
+  if fm_brief_ship_intent_valid "$brief"; then fail "duplicate intent checks were accepted"; fi
+  pass "new ship brief requires a completed clear or grilled intent check"
+}
+
 test_scout_done_is_not_gated
 test_unpushed_ship_done_is_refused
 test_no_mistakes_prevalidation_done_is_not_gated
@@ -433,5 +451,6 @@ test_non_done_lines_are_not_gated
 test_fenced_and_indented_captain_lines_are_not_intent
 test_pr_based_dod_draft_check_uses_gh_axi
 test_new_ship_brief_requires_observable_verification
+test_new_ship_brief_requires_intent_check
 
 echo "all fm-dod-lib tests passed"

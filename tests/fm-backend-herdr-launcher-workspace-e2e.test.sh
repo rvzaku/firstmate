@@ -195,6 +195,7 @@ Exercise Herdr launcher placement for $2.
 
 ## Firstmate spec
 Verify the worker is placed in the correct workspace.
+Intent check: clear: the fixture defines the expected launch behavior.
 Observable result: the worker pane appears in the expected workspace.
 Verification command: run the Herdr launcher workspace end-to-end test.
 EOF

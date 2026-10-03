@@ -273,7 +273,7 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
       "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
   status=$?
-  expect_code 0 "$status" "spawn with relative home overrides should succeed"
+  expect_code 0 "$status" "spawn with relative home overrides should succeed: $out"
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "-e '$home_real/state/$id.pi-ext.ts'" \
     "relative FM_STATE_OVERRIDE leaked into Pi's cross-process extension path"
@@ -1283,6 +1283,7 @@ test_new_ship_requires_observable_verification_fields() {
 exercise the verification brief contract
 
 ## Firstmate spec
+Intent check: clear: the verification contract defines the expected outcome.
 Observable result: the outcome is visible.
 EOF
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" 2>&1)
@@ -1683,6 +1684,7 @@ test_worker_launch_delivers_role_scope() {
       content=$(cat "$brief")
       content=${content//'{TASK}'/brief for $id}
       content=${content//'{FIRSTMATE_SPEC}'/Exercise the spawn behavior under test.}
+      content=${content//'{clear: one-line reason, or grilled: Q: question A: answer}'/clear: the fixture defines the expected launch behavior.}
       content=${content//'{state the visible or otherwise observable outcome}'/the expected worker launch is visible.}
       content=${content//'{project command, or replace this line with Verification limit: and state the limitation}'/run the focused spawn fixture test.}
       printf '%s\n' "$content" > "$brief"
