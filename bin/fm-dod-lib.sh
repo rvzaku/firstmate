@@ -249,6 +249,18 @@ fm_brief_task_content_valid() {  # <file>
   [ -n "$(printf '%s' "$task" | tr -d '[:space:]')" ]
 }
 
+# A new ship brief states its observable result and verification path.
+fm_brief_ship_verification_valid() {  # <file>
+  local spec
+  spec=$(fm_brief_task_heading_body "$1" "## Firstmate spec") || return 1
+  printf '%s\n' "$spec" | awk '
+    /^[[:space:]]*Observable result:[[:space:]]*[^[:space:]{}].*/ { result = 1 }
+    /^[[:space:]]*Verification command:[[:space:]]*[^[:space:]{}].*/ { command = 1 }
+    /^[[:space:]]*Verification limit:[[:space:]]*[^[:space:]{}].*/ { limit = 1 }
+    END { exit !(result && (command || limit)) }
+  '
+}
+
 # Print the first `## Captain's intent` body line that opens with an operator
 # address spelling; fail when there is none. The body is never rewritten.
 fm_brief_intent_address_line() {  # <file>

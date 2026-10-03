@@ -529,6 +529,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/WORKFLOW-SOURCES.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/watcher-continuity.md",
       "audience": "operator-current"
     },

@@ -213,6 +213,12 @@ test_ship_modes_generate_clean_briefs() {
     assert_grep "{FIRSTMATE_SPEC}" "$brief" "$id: brief missing the {FIRSTMATE_SPEC} placeholder"
     assert_grep "## Captain's intent" "$brief" "$id: brief missing Captain's intent subsection"
     assert_grep "## Firstmate spec" "$brief" "$id: brief missing Firstmate spec subsection"
+    assert_grep 'For refactor work, first add or confirm automated tests that prove the touched behavior is unchanged' "$brief" \
+      "$id: brief missing the test-first refactor instruction"
+    assert_grep 'Observable result: ' "$brief" "$id: brief missing observable-result field"
+    assert_grep 'Verification command: ' "$brief" "$id: brief missing verification field"
+    assert_grep '.msg file in numeric order' "$brief" "$id: inbox guidance must list the directory without an empty-glob failure"
+    assert_no_grep '/*.msg' "$brief" "$id: inbox guidance must not list an empty-sensitive message glob"
     assert_grep 'never a bare number such as "PR 108"' "$brief" "$id: brief missing the full-PR-URL rule"
     assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
       "$id: brief missing nonterminal working:/setup-complete gate protection"

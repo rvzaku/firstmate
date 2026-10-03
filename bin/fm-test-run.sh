@@ -2,6 +2,7 @@
 # fm-test-run.sh - single owner of Firstmate's behavior-test runner, lane
 # composition for portable CI shards, local --jobs for proven-concurrent work,
 # timing markers, and the complete-regression coverage guard.
+# Usage: fm-test-run.sh <selection> [options]
 #
 # Selection modes (exactly one of: --all, --family, --changed, --lane,
 # --proven-isolated, or script paths):

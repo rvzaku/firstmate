@@ -103,6 +103,8 @@ Exercise Herdr backend auto-detection.
 
 ## Firstmate spec
 Verify the real spawn path selects Herdr.
+Observable result: the spawn record names the detected Herdr backend.
+Verification command: run the backend auto-detection smoke test.
 EOF
 
 PROJ="$TMP_ROOT/scratch-project"

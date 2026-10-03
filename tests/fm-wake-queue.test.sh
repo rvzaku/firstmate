@@ -19,6 +19,28 @@ GUARD="$ROOT/bin/fm-guard.sh"
 TMP_ROOT=$(fm_test_tmproot fm-wake-tests)
 
 
+test_compact_output_preserves_default_and_ack() {
+  local dir state raw compact seq generation
+  dir=$(make_case compact)
+  state="$dir/state"
+  append_wake "$state" signal task "signal: $state/task.status"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/default.out" 2> "$dir/default.err" \
+    || fail "default drain failed"
+  raw=$(awk -F '\t' 'NF == 5 { print; exit }' "$dir/default.out")
+  [ -n "$raw" ] || fail "default drain output no longer contains the full queue row"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" --compact > "$dir/compact.out" 2> "$dir/compact.err" \
+    || fail "compact drain failed"
+  compact=$(awk 'NR == 2 { print; exit }' "$dir/compact.out")
+  [ "$compact" = "1 signal task" ] || fail "compact drain row was unexpected: $compact"
+  seq=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' "$dir/compact.err")
+  generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$dir/compact.err")
+  [ -n "$seq" ] && [ -n "$generation" ] || fail "compact drain changed the acknowledgement contract"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" --ack-through "$seq" --recovery-generation "$generation" \
+    || fail "compact drain acknowledgement failed"
+  pass "wake drain: compact rows are opt-in and preserve the default rows and acknowledgement"
+}
+
+
 test_concurrent_append_and_drain() {
   local dir state out1 out2 pids i pid count unique malformed sequence generation
   dir=$(make_case concurrent)
@@ -3443,6 +3465,7 @@ test_unreadable_status_is_not_owned
 test_folded_worker_resolved_is_not_owned_lag
 test_owned_growth_still_annotates_turn_ended
 test_historical_annotation_skips_announced_status
+test_compact_output_preserves_default_and_ack
 test_concurrent_append_and_drain
 test_signal_catchup_without_running_watcher
 test_stale_enqueue_before_suppressor

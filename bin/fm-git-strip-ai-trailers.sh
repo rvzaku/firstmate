@@ -61,12 +61,13 @@ unset CDPATH GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
 SELF="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"
 
 usage() {
+  local status=${1:-2}
   cat >&2 <<'EOF'
 usage:
   fm-git-strip-ai-trailers.sh <msgfile>
   fm-git-strip-ai-trailers.sh install <hooks-dir> <worktree>
 EOF
-  exit 2
+  exit "$status"
 }
 
 trim_space() {
@@ -250,7 +251,7 @@ install)
   install_hooks "$2" "$3"
   ;;
 -h | --help)
-  usage
+  usage 0
   ;;
 '')
   usage

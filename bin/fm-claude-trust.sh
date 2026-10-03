@@ -33,10 +33,9 @@
 # Code's separate "Allow external CLAUDE.md file imports?" dialog, which
 # `--setting-sources project,local` (firstmate PR 10's minimal worker tool
 # surface) stopped suppressing: it renders whenever a loaded CLAUDE.md chain
-# reaches outside the project tree - which every crewmate's does, through the
-# captain's own `~/.claude/CLAUDE.md` importing `~/.claude/RTK.md` - and it is
-# gated the same fail-closed way as trust: cursor on "No, disable", no arrow
-# navigation from firstmate's steering plane. Only worktree mode reaches this
+# reaches outside the project tree. The import that triggers it in this setup
+# is not established. It is gated the same fail-closed way as trust: cursor on "No, disable", no arrow navigation from firstmate's
+# steering plane. Only worktree mode reaches this
 # second dialog's flags: a secondmate home has no separate "project" entry to
 # carry consent forward from, so its registration stays trust-only.
 #
@@ -185,10 +184,11 @@ unset CDPATH \
   GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT
 
 usage() {
+  local status=${1:-2}
   echo "usage: fm-claude-trust.sh <worktree> <project>" >&2
   echo "       fm-claude-trust.sh --secondmate-home <home> <id>" >&2
   echo "       fm-claude-trust.sh --lab-home <home>" >&2
-  exit 2
+  exit "$status"
 }
 
 # MODE selects which structural scope test decides the argument, and SCOPE_NOUN
@@ -211,7 +211,10 @@ case "${1:-}" in
     PROJ_ARG=
     SCOPE_NOUN="lab home"
     ;;
-  '' | -h | --help)
+  -h | --help)
+    usage 0
+    ;;
+  '')
     usage
     ;;
   *)

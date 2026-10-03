@@ -71,7 +71,7 @@ REMOTE_HERDR_SESSION=fm-remote
 . "$SCRIPT_DIR/fm-task-inbox-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { local status=${1:-2}; sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit "$status"; }
 validate_id() { case "$1" in ''|*[!A-Za-z0-9._-]*) die "invalid secondmate id: $1" ;; esac; }
 
 validate_home() { # <id> [allow-absent]
@@ -446,6 +446,7 @@ case "${1:-}" in
   sync) shift; [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage; cmd_sync "$@" ;;
   update) shift; [ "$#" -eq 1 ] || usage; cmd_update "$@" ;;
   retire) shift; [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage; cmd_retire "$@" ;;
-  ''|-h|--help|help) usage ;;
+  -h|--help|help) usage 0 ;;
+  '') usage ;;
   *) die "unknown command: $1" ;;
 esac

@@ -566,6 +566,8 @@ Exercise Antigravity dispatch.
 
 ## Firstmate spec
 Verify launch and delivery behavior.
+Observable result: the expected Antigravity worker launch is visible.
+Verification command: run the focused Antigravity harness test.
 EOF
   printf 'agy\n' > "$home/config/crew-harness"
   mkdir -p "$home/.gemini/antigravity-cli"

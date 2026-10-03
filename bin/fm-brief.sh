@@ -14,6 +14,8 @@
 # charters still use a single `{TASK}` charter fill. Firstmate may adjust other
 # sections when the task genuinely deviates (e.g. working an existing external
 # PR instead of shipping a new one).
+# A ship's Firstmate spec must state an observable result and the
+# project's verification command, or state an explicit verification limitation.
 # Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--branch-prefix <prefix>] [--forge <none|gerrit> [--shape squash]] [--herdr-lab]
 #        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
@@ -359,7 +361,7 @@ INBOX_DIR=$(shell_quote "$STATE/$ID.inbox")
 IFS= read -r -d '' INBOX_SECTION <<EOF || true
 # Firstmate instruction inbox
 Firstmate steers you through durable message files in $INBOX_DIR.
-When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list $INBOX_DIR/*.msg, read and act on each message in numeric order, then acknowledge each handled message by moving it: \`mv $INBOX_DIR/NNN.msg $INBOX_DIR/handled/\`.
+When a terminal message says an instruction is waiting there - and at any natural checkpoint when you are unsure - list $INBOX_DIR, read and act on each .msg file in numeric order, then acknowledge each handled message by moving it: \`mv $INBOX_DIR/NNN.msg $INBOX_DIR/handled/\`.
 The move IS the acknowledgement: without it firstmate rings again and eventually treats you as stuck. An empty or absent inbox needs no action.
 EOF
 if [ -e "$CONFIG/wait-no-turns" ]; then
@@ -533,6 +535,11 @@ IFS= read -r -d '' TASK_SECTION <<'EOF' || true
 
 ## Firstmate spec
 {FIRSTMATE_SPEC}
+
+Observable result: {state the visible or otherwise observable outcome}
+Verification command: {project command, or replace this line with Verification limit: and state the limitation}
+
+For refactor work, first add or confirm automated tests that prove the touched behavior is unchanged. Run those tests successfully before the refactor starts.
 EOF
 TASK_SECTION=${TASK_SECTION%$'\n'}
 
