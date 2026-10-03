@@ -103,6 +103,7 @@ Exercise Herdr backend auto-detection.
 
 ## Firstmate spec
 Verify the real spawn path selects Herdr.
+Intent check: clear: the fixture defines the expected launch behavior.
 Observable result: the spawn record names the detected Herdr backend.
 Verification command: run the backend auto-detection smoke test.
 EOF

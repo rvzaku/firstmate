@@ -288,6 +288,7 @@ $intent
 
 ## Firstmate spec
 Exercise the spawn behavior under test.
+Intent check: clear: the fixture defines the expected spawn behavior.
 Observable result: the worker spawn reaches the expected launch stage.
 Verification command: run the focused spawn fixture test.
 EOF

@@ -101,6 +101,39 @@ assert_pane_export_precedes_launch() {  # <pane-log> <label>
     || fail "$label: the compact-adviser export must ride the GOTMPDIR pre-launch site (gotmp=$gotmp switch=$switch)"
 }
 
+test_new_ship_intent_gate() {
+  local value rec out status id brief
+  for value in missing placeholder clear grilled scout; do
+    id="intent-$value-a1"
+    rec=$(make_case "intent-$value" codex "$id")
+    read_case "$rec"
+    brief="$HOME_DIR/data/$id/brief.md"
+    sed '/^Intent check:/d' "$brief" > "$brief.tmp"
+    mv "$brief.tmp" "$brief"
+    case "$value" in
+      placeholder) printf 'Intent check: {clear: reason, or grilled: questions and answers}\n' >> "$brief" ;;
+      clear) printf 'Intent check: clear: the request defines the spawn outcome.\n' >> "$brief" ;;
+      grilled) printf 'Intent check: grilled: Q: Which scope? A: Only new ship intake.\n' >> "$brief" ;;
+    esac
+    if [ "$value" = scout ]; then
+      out=$(run_case_spawn "$id" "$PROJ_DIR" --scout)
+    else
+      out=$(run_case_spawn "$id" "$PROJ_DIR" --mode no-mistakes --yolo off)
+    fi
+    status=$?
+    case "$value" in
+      missing|placeholder)
+        [ "$status" -ne 0 ] || fail "new ship accepted $value intent check"
+        assert_contains "$out" 'must state Intent check:' "intent refusal must explain the required field"
+        [ ! -s "$LAUNCH_LOG" ] || fail "refused intent check launched a worker"
+        assert_absent "$HOME_DIR/state/$id.meta" "refused intent check published metadata"
+        ;;
+      *) expect_code 0 "$status" "$value intent check should spawn: $out" ;;
+    esac
+  done
+  pass "new ships refuse unfinished intent checks and accept clear or grilled records; scouts are exempt"
+}
+
 test_ship_allowlist_absent() {
   local rec out status seen
   rec=$(make_case ship-open codex ship-open-a1)
@@ -304,6 +337,8 @@ test_relaunch_rebuilds_the_switch() {
     make_relaunch_stub "$dir"
     fm_git_worktree "$proj" "$wt" "wt-relaunch-$setting"
     fm_test_spawn_brief "$home" "$id"
+    sed '/^Intent check:/d' "$home/data/$id/brief.md" > "$home/data/$id/brief.tmp"
+    mv "$home/data/$id/brief.tmp" "$home/data/$id/brief.md"
     : > "$dir/fake/literal"
     : > "$dir/fake/keys"
     printf 'codex' > "$dir/fake/command"
@@ -382,6 +417,7 @@ SH
   pass "a compound raw launch-command still starts its agent with the compact-adviser switch on"
 }
 
+test_new_ship_intent_gate
 test_ship_allowlist_absent
 test_ship_allowlist_enabled
 test_launch_command_carries_the_switch_without_the_pane_export

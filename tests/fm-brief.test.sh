@@ -215,6 +215,7 @@ test_ship_modes_generate_clean_briefs() {
     assert_grep "## Firstmate spec" "$brief" "$id: brief missing Firstmate spec subsection"
     assert_grep 'For refactor work, first add or confirm automated tests that prove the touched behavior is unchanged' "$brief" \
       "$id: brief missing the test-first refactor instruction"
+    assert_grep 'Intent check: ' "$brief" "$id: brief missing intent-check field"
     assert_grep 'Observable result: ' "$brief" "$id: brief missing observable-result field"
     assert_grep 'Verification command: ' "$brief" "$id: brief missing verification field"
     assert_grep '.msg file in numeric order' "$brief" "$id: inbox guidance must list the directory without an empty-glob failure"

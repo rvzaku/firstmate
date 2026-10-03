@@ -53,6 +53,7 @@ An owner is the current place for the practice. A gap names the tracked backlog 
 | Use medium for defined work and xhigh for ambiguity | `.agents/skills/harness-adapters/references/common/model-and-effort.md`. |
 | Keep skills small, triggered, and composable | `.agents/skills/` descriptions and `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
 | Define observable success and use the real feedback loop | `AGENTS.md`, `bin/fm-brief.sh`, and `bin/fm-dod-lib.sh`. |
+| Clarify unclear intent and record the answer before building | `bin/fm-brief.sh` and `bin/fm-dod-lib.sh`; `bin/fm-spawn.sh` refuses a new ship brief without an `Intent check:` line. |
 | Reproduce a bug before diagnosing its cause | `.agents/skills/diagnostic-reasoning/SKILL.md`. |
 | Use small interfaces and test behavior through them | `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
 | Keep work in complete, verifiable slices with explicit blockers | `AGENTS.md` decomposition guidance and the existing backlog dependency model. |
