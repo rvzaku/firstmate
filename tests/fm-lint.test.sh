@@ -188,7 +188,10 @@ test_registered_project_guard() {
   git -C "$fake_root" add -f -- AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
     .github/workflows/ bin/ .agents/skills/ skills/ docs/ tests/
   printf '%s\n' '- synthetic-widget [no-mistakes] - fixture' \
-    '- legacy product - fixture' '- bare-widget' > "$home/data/projects.md"
+    '- legacy product - fixture' '- bare-widget' \
+    '- api [no-mistakes] - fixture' \
+    '- delimiter - product [no-mistakes] - fixture' \
+    '- delimiter [product] [no-mistakes] - fixture' > "$home/data/projects.md"
 
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "clean shared tree failed the registered project guard: $out"
@@ -235,6 +238,23 @@ test_registered_project_guard() {
     fail "untracked shared material was included by the registered project guard: $out"
   }
   pass "registered project guard ignores untracked shared files"
+
+  printf '%s\n' 'a capitalized key' > "$fake_root/tests/fixture.sh"
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+    fail "a short registered name matched inside an unrelated word: $out"
+  }
+  : > "$fake_root/tests/fixture.sh"
+  pass "registered project guard ignores short-name substrings inside other words"
+
+  for name in api 'delimiter - product' 'delimiter [product]'; do
+    printf '%s\n' "$name" > "$fake_root/README.md"
+    rc=0
+    out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+    [ "$rc" -ne 0 ] || fail "complete registered name '$name' passed the guard"
+    assert_contains "$out" 'README.md' "guard missed complete registered name '$name'"
+    : > "$fake_root/README.md"
+  done
+  pass "registered project guard matches complete short and delimiter names"
 
   rm -f "$home/data/projects.md"
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {

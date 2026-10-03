@@ -140,7 +140,7 @@ fm_lint_registered_project_guard() {
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     for file in "${shared_files[@]}"; do
-      if grep -Fq -- "$name" "$file" 2>/dev/null; then
+      if grep -Fqw -- "$name" "$file" 2>/dev/null; then
         printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
         found=1
       fi
@@ -148,12 +148,11 @@ fm_lint_registered_project_guard() {
   done < <(awk '
     substr($0, 1, 2) == "- " {
       line = substr($0, 3)
-      bracket = index(line, " [")
-      legacy = index(line, " - ")
-      end = 0
-      if (bracket && (!legacy || bracket < legacy)) end = bracket
-      else end = legacy
-      if (end) line = substr(line, 1, end - 1)
+      for (i = 2; i <= length(line); i++) {
+        if (substr(line, i, 2) == " [" || substr(line, i, 3) == " - ") {
+          print substr(line, 1, i - 1)
+        }
+      }
       print line
     }
   ' "$registry")
