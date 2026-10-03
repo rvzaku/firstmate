@@ -161,6 +161,15 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
 
+usage() {
+  sed -n '2,/^set -eu$/s/^# \{0,1\}//p' "$0"
+}
+
+if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+  usage
+  exit 0
+fi
+
 if [ "$#" -lt 2 ]; then
   echo "error: invalid PR merge request" >&2
   exit 2

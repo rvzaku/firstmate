@@ -29,6 +29,18 @@ MR_STALE_HEAD=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 JQ_BIN=$(command -v jq) || fail "these tests read glab's JSON with the real jq, which was not found"
 REAL_MV=$(command -v mv) || fail "these tests need mv to simulate a failed poll publish"
 
+test_help_prints_header_and_succeeds() {
+  local flag out status
+  for flag in --help -h; do
+    out=$("$PR_MERGE" "$flag" 2>&1)
+    status=$?
+    [ "$status" -eq 0 ] || fail "$flag exited $status instead of 0: $out"
+    assert_contains "$out" 'Usage: fm-pr-merge.sh <task-id> <pr-url>' "$flag did not print header usage"
+    assert_not_contains "$out" 'error: invalid PR merge request' "$flag printed a request error"
+  done
+  pass "--help and -h print the script header and exit successfully"
+}
+
 # Build a fresh sandbox for one test case: a state dir with task metadata and a
 # directory for its forge-command mocks. Echoes the case directory.
 make_case() {
@@ -3832,6 +3844,7 @@ test_allow_missing_follows_the_allow_red_rules() {
   pass "fm-pr-merge --allow-missing is single use, attended-only, and GitHub-only like --allow-red"
 }
 
+test_help_prints_header_and_succeeds
 test_gitlab_head_override_args_refuse_before_recording
 test_secondmate_merge_reports_upward_once
 test_secondmate_merge_reports_on_the_local_route
