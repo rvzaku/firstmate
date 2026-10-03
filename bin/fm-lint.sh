@@ -123,6 +123,64 @@ SELF="$SELF_DIR/fm-lint.sh"
 ROOT="$(cd "$SELF_DIR/.." && pwd -P)"
 cd "$ROOT" || exit 1
 
+fm_lint_registered_project_guard() {
+  local home registry name file found=0 matches rc entry path target
+  local -a links=()
+  home=${FM_HOME:-${FM_ROOT_OVERRIDE:-$ROOT}}
+  registry=${FM_DATA_OVERRIDE:-$home/data}/projects.md
+  [ -e "$registry" ] || return 0
+  [ -r "$registry" ] || {
+    printf 'fm-lint.sh: cannot read the private project registry.\n' >&2
+    return 1
+  }
+  while IFS= read -r -d '' entry; do
+    if [ "${entry:0:6}" = 120000 ]; then links+=("${entry#*$'\t'}"); fi
+  done < <(git ls-files -s -z)
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    for path in ${links[@]+"${links[@]}"}; do
+      target=$(git cat-file blob ":$path") || {
+        printf 'fm-lint.sh: cannot inspect tracked files for the registered project guard.\n' >&2
+        return 1
+      }
+      if printf '%s\n' "$target" | grep -q -F -i -w -- "$name"; then
+        printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$path" >&2
+        found=1
+      fi
+    done
+    rc=0
+    matches=$(git grep --cached -I -F -i -w -l -- "$name") || rc=$?
+    case "$rc" in
+      0)
+        while IFS= read -r file; do
+          [ -n "$file" ] || continue
+          printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
+        done <<< "$matches"
+        found=1
+        ;;
+      1) ;;
+      *)
+        printf 'fm-lint.sh: cannot inspect tracked files for the registered project guard.\n' >&2
+        return 1
+        ;;
+    esac
+  done < <(awk '
+    substr($0, 1, 2) == "- " {
+      line = substr($0, 3)
+      print line
+      for (i = 1; i < length(line); i++) {
+        if (substr(line, i, 2) == " [" || substr(line, i, 3) == " - ") print substr(line, 1, i - 1)
+      }
+    }
+  ' "$registry")
+  [ "$found" -eq 0 ]
+}
+
+case "${1:-}" in
+  --internal-worker|--internal-root|--internal-timed) ;;
+  *) fm_lint_registered_project_guard || exit 1 ;;
+esac
+
 # The sibling timeout library supplies the shared group-kill watchdog that
 # bounds each root when FM_LINT_REQUIRE_BOUNDS=1 requires it; without the
 # library a required-bounds run refuses in preflight rather than lint uncapped.
