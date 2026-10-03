@@ -50,7 +50,20 @@ test_recurring_check_outcomes() {
   [ "$mode" -lt 100 ] || { reap "$pid"; fail "unchanged failed check was not rerun"; }
   wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "rerun failure produced a second wake"; }
   [ ! -s "$dir/repeat.out" ] || fail "unchanged failure printed a wake"
-  printf '0\n' > "$dir/mode"
+  reap "$pid"
+  for code in a b; do
+    printf 'echo diagnostic-%s\nexit 7\n' "$code" > "$state/fixture.check.sh"
+    FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "diagnostic registration failed"
+    watch_bg "$state" "$dir/fakebin" "$dir/diagnostic-$code.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+    pid=$!
+    wait_for_exit "$pid" 100 || { reap "$pid"; fail "failure diagnostic $code did not wake within one episode"; }
+    grep -F "output: diagnostic-$code" "$dir/diagnostic-$code.out" >/dev/null || fail "failure wake lost diagnostic $code: $(cat "$dir/diagnostic-$code.out")"
+    ack_stopped_cycle "$state" || fail "could not acknowledge diagnostic $code"
+  done
+  watch_bg "$state" "$dir/fakebin" "$dir/repeat.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+  pid=$!
+  printf 'exit 0\n' > "$state/fixture.check.sh"
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "recovery registration failed"
   mode=0
   while [ -e "$state/.check-failure-fixture" ] && [ "$mode" -lt 100 ]; do sleep 0.1; mode=$((mode + 1)); done
   [ ! -e "$state/.check-failure-fixture" ] || fail "recovery did not clear episode"

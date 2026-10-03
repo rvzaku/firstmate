@@ -40,8 +40,10 @@ fm_sup_stat_mtime() {
 #                         external process, not a task, so it has no metadata),
 #                         a registered custom check, or authorized pending backlog
 #                         work or its next eligibility deadline
-#   FM_SUP_BACKLOG        true/false - pending work, a deadline, or read uncertainty
-#   FM_SUP_BACKLOG_DETAIL bounded configured-backlog readiness snapshot
+#   FM_SUP_BACKLOG        true/false - pending work or a deadline; read failure or uncertainty never sets it
+#   FM_SUP_BACKLOG_DETAIL bounded configured-backlog readiness snapshot, cached
+#                         for 60 seconds in state/.backlog-ready-cache after a
+#                         successful read without uncertainty
 #   FM_SUP_WATCHER_FRESH  true/false - a watcher beacon within the grace window
 #   FM_SUP_BEACON_DESC    human-readable beacon age, for banners ("never" if absent)
 #   FM_SUP_QUEUE_PENDING  true/false - state/.wake-queue has unread records
@@ -77,13 +79,30 @@ fm_supervision_status() {
     [ -e "$state/$id.check-trust" ] || continue
     FM_SUP_CHECKS=$((FM_SUP_CHECKS + 1))
   done
-  local readiness_bin home
+  local readiness_bin home cache cached_at snapshot line now tab
+  tab=$(printf '\t')
   readiness_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-backlog-ready.sh"
   home=${FM_HOME:-${state%/*}}
+  cache="$state/.backlog-ready-cache"
   if [ -x "$readiness_bin" ]; then
-    FM_SUP_BACKLOG_DETAIL=$(FM_HOME="$home" FM_STATE_OVERRIDE="$state" "$readiness_bin") \
-      || FM_SUP_BACKLOG_DETAIL="uncertainty: backlog readiness reader failed"
-    [ -z "$FM_SUP_BACKLOG_DETAIL" ] || FM_SUP_BACKLOG=true
+    now=$(date +%s)
+    cached_at=$(fm_sup_stat_mtime "$cache")
+    if [ -n "$cached_at" ] && [ $((now - cached_at)) -ge 0 ] && [ $((now - cached_at)) -lt 60 ]; then
+      FM_SUP_BACKLOG_DETAIL=$(cat "$cache" 2>/dev/null)
+    elif snapshot=$(FM_HOME="$home" FM_STATE_OVERRIDE="$state" "$readiness_bin" 2>/dev/null); then
+      FM_SUP_BACKLOG_DETAIL=$snapshot
+      case "$snapshot" in
+        *uncertainty*) ;;
+        *) [ ! -d "$state" ] || printf '%s' "$snapshot" > "$cache" 2>/dev/null || true ;;
+      esac
+    fi
+    while IFS= read -r line; do
+      case "$line" in
+        ready"$tab"*|pending"$tab"*) FM_SUP_BACKLOG=true ;;
+      esac
+    done <<BACKLOG_EOF
+$FM_SUP_BACKLOG_DETAIL
+BACKLOG_EOF
   fi
   if [ "$FM_SUP_IN_FLIGHT" -gt 0 ] \
     || [ -f "$state/x-watch.check.sh" ] \

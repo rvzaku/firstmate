@@ -2210,7 +2210,7 @@ run_check_capture() {
 }
 
 custom_check_outcome() {
-  local id=$1 timed_out=$FM_CHECK_TIMED_OUT tmp reason
+  local id=$1 timed_out=$FM_CHECK_TIMED_OUT tmp reason detail signature
   tmp=$(mktemp "$STATE/.check-result.XXXXXX") || return 1
   chmod 0600 "$tmp" || return 1
   jq -n --argjson started "$FM_CHECK_STARTED" --argjson finished "$FM_CHECK_FINISHED" \
@@ -2222,10 +2222,13 @@ custom_check_outcome() {
     rm -f "$STATE/.check-failure-$id"
     return 0
   fi
-  if [ ! -e "$STATE/.check-failure-$id" ]; then
+  detail=$(printf '%s' "$FM_CHECK_RESULT" | head -c 500 | tr '\n\r' '  ')
+  signature=$(printf '%s|%s|%s' "$FM_CHECK_EXIT_STATUS" "$timed_out" "$FM_CHECK_RESULT" | cksum)
+  if [ "$(cat "$STATE/.check-failure-$id" 2>/dev/null)" != "$signature" ]; then
     reason="check: recurring check failed: $id exit=$FM_CHECK_EXIT_STATUS timeout=$timed_out started=$FM_CHECK_STARTED finished=$FM_CHECK_FINISHED"
+    [ -z "$detail" ] || reason="$reason output: $detail"
     fm_wake_append check "check-failure:$id" "$reason" || return 1
-    printf '%s\n' "$FM_CHECK_STARTED" > "$STATE/.check-failure-$id" || return 1
+    printf '%s\n' "$signature" > "$STATE/.check-failure-$id" || return 1
     touch "$STATE/.last-check"
     wake "$reason"
   fi
