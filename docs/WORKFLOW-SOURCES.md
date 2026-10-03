@@ -1,7 +1,6 @@
 # Workflow sources
 
 This workflow is product agnostic. Product-specific knowledge belongs in private data and each product's own repository. Firstmate discovers and uses those local instructions without embedding their domain rules.
-`bin/fm-lint.sh` enforces this: it fails when tracked files, or tracked symlink targets, name a project in the private `data/projects.md` registry. `tests/fm-lint.test.sh` covers the matching rules.
 
 ## Verified practices
 
