@@ -56,13 +56,13 @@ An owner is the current place for the practice. A gap names the tracked backlog 
 | Reproduce a bug before diagnosing its cause | `.agents/skills/diagnostic-reasoning/SKILL.md`. |
 | Use small interfaces and test behavior through them | `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
 | Keep work in complete, verifiable slices with explicit blockers | `AGENTS.md` decomposition guidance and the existing backlog dependency model. |
-| Sample landed work and queue patterns for review | Gap: `fm-gardener-backpass`. |
+| Sample landed work and queue patterns for review | `bin/fm-gardener.sh` samples pipeline findings and queues recurring themes for lint-rule work. |
 | Mine correction transcripts for workflow updates | Gap: `fm-align-maintenance-loop`. |
 | Trigger bounded triage from external signals | Existing process-event sources. |
 | Fuzz per-PR verification with real-app verifier agents | The selected no-mistakes path. |
 | Maintain isolated work, compact tool output, and validation gates | `AGENTS.md`, `bin/fm-spawn.sh`, and the selected delivery path. Compaction advice review gap: `fm-align-maintenance-loop`. |
 | Propose memory changes from corroborated evidence and validate separately | Gap: `fm-align-maintenance-loop` and `fm-backpass-memory`. Human preferences remain protected. |
-| Remove workarounds and maintain a preferred pattern | Gap: `fm-gardener-backpass`; correction-to-check handoff: `.agents/skills/firstmate-coding-guidelines/SKILL.md`. |
+| Remove workarounds and maintain a preferred pattern | `.agents/skills/firstmate-coding-guidelines/SKILL.md` owns the correction-to-check handoff, and `bin/fm-gardener.sh` queues recurring themes for lint-rule work. |
 | Use measured baselines and bounded experiment records | The task specification and selected validation owner; apply only to authorized experiment work. |
 
 ## Trust order
