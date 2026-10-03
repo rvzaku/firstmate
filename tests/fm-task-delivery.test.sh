@@ -490,7 +490,7 @@ test_promotion_branch_command_is_shell_safe() {
 }
 
 test_local_merge_uses_the_recorded_ship_branch() {
-  local home proj id main fix out
+  local home proj id main fix out variant rc
   home="$TMP_ROOT/local-merge-branch/home"
   proj="$TMP_ROOT/local-merge-branch/proj"
   id=local-merge-branch-e2
@@ -512,6 +512,26 @@ test_local_merge_uses_the_recorded_ship_branch() {
 - $(basename "$proj") [local-only branch=contrib/] - changed after task intake (added 2026-01-01)
 EOF
   printf 'project=%s\nmode=local-only\nbranch=fix/%s\n' "$proj" "$id" > "$home/state/$id.meta"
+  for variant in absent stale failed wrong-generation; do
+    case "$variant" in
+      absent) ;;
+      *)
+        jq -n --arg id "$id" --arg head "$fix" --arg variant "$variant" '
+          {task_id:$id,spawn_gen:(if $variant == "wrong-generation" then "old" else "" end),
+           head:(if $variant == "stale" then "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" else $head end),
+           result:(if $variant == "failed" then "failed" else "passed" end),
+           scope:"changed-surface",source:"local behavior test"}' > "$home/state/$id.validation.json"
+        ;;
+    esac
+    rc=0
+    out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$MERGE_LOCAL" "$id" 2>&1) || rc=$?
+    [ "$rc" -eq 1 ] || fail "local landing accepted $variant evidence: $out"
+    assert_contains "$out" 'no positive validation at head' "local $variant refusal did not explain the receipt"
+    [ "$(git -C "$proj" rev-parse HEAD)" != "$fix" ] || fail "local $variant refusal moved the default branch"
+  done
+  jq -n --arg id "$id" --arg head "$fix" \
+    '{task_id:$id,spawn_gen:"",head:$head,result:"passed",scope:"changed-surface",source:"local behavior test"}' \
+    > "$home/state/$id.validation.json"
   out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$MERGE_LOCAL" "$id") \
     || fail "local merge did not use the branch recorded at task intake: $out"
   [ "$(git -C "$proj" rev-parse HEAD)" = "$fix" ] \

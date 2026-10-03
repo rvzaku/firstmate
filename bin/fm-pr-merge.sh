@@ -16,7 +16,11 @@
 # is green at the exact current head commit, where github_checks_not_green below
 # owns what makes a check green and judges each one by its current run, and
 # every unwaived check the forge requires for the base branch has reported at
-# that head. When mergeable is the only failing condition and reads UNKNOWN,
+# that head. Positive validation also requires an actual successful current
+# check or a head-bound task receipt owned by bin/fm-validation-lib.sh; neutral,
+# skipped, absent, and waived checks cannot supply it. A repository without CI
+# uses the task's pipeline Test receipt, which that helper records automatically.
+# When mergeable is the only failing condition and reads UNKNOWN,
 # meaning GitHub has not finished recomputing it, the caller re-reads and
 # re-checks every condition after a short bounded wait instead of refusing;
 # once that bound is spent it reports mergeability still pending rather than
@@ -164,6 +168,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-merge-authority-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-validation-lib.sh
+. "$SCRIPT_DIR/fm-validation-lib.sh"
 
 usage() {
   sed -n '2,/^set -eu$/s/^# \{0,1\}//p' "$0"
@@ -778,6 +784,7 @@ FIELDS
     echo "error: could not read the GitHub pull request head commit before merging" >&2
     return 1
   fi
+  json=$(printf '%s' "$json" | jq -c 'if .statusCheckRollup == null then .statusCheckRollup = [] else . end') || return 1
   if ! red=$(github_checks_not_green "$json"); then
     echo "error: could not read the GitHub pull request state before merging" >&2
     return 1
@@ -853,6 +860,25 @@ EOF
     done <<EOF
 $missing
 EOF
+  fi
+
+  if ! printf '%s' "$json" | jq -e '
+      .statusCheckRollup as $checks
+      | any($checks[];
+          (.__typename == "StatusContext" and .state == "SUCCESS")
+          or (.__typename == "CheckRun" and .status == "COMPLETED" and .conclusion == "SUCCESS"
+            and (. as $run | all($checks[];
+              .__typename != "CheckRun" or .name != $run.name
+              or (.startedAt == null and $run.startedAt == null and .status == "COMPLETED" and .conclusion == "SUCCESS")
+              or (.startedAt != null and $run.startedAt != null
+                and (.startedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+                and ($run.startedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+                and (.startedAt < $run.startedAt
+                  or (.startedAt == $run.startedAt and .status == "COMPLETED" and .conclusion == "SUCCESS"))))))
+        )' >/dev/null 2>&1 \
+    && ! fm_validation_receipt "$STATE" "$ID" "$META" "$live_head"; then
+    refusals="$refusals  - no positive validation at head $live_head; require a successful current check or $STATE/$ID.validation.json changed-surface receipt (head, task_id, spawn_gen, result=passed, scope=changed-surface, source); no-mistakes Test evidence is recorded automatically
+"
   fi
 
   if [ -n "$mergeable_refusal" ]; then
