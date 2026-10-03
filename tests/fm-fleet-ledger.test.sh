@@ -49,6 +49,8 @@ Exercise the fleet ledger for $TASK.
 
 ## Firstmate spec
 Nothing to build.
+Observable result: The lifecycle emits the expected ledger entries.
+Verification command: tests/fm-fleet-ledger.test.sh
 EOF
   FAKEBIN=$(make_fakebin "$dir")
 }
