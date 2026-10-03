@@ -1076,7 +1076,7 @@ esac
 if [ -n "$RAW_ROWS" ]; then
   if [ "$COMPACT_OUTPUT" = true ]; then
     printf 'seq kind source\n'
-    printf '%s\n' "$RAW_ROWS" | awk -F '\t' 'NF >= 5 { printf "%s %s %s\n", $2, $3, ($4 == "" ? "-" : $4) }' || exit "$?"
+    printf '%s\n' "$RAW_ROWS" | awk -F '\t' 'NF >= 5 { printf "%s %s %s\n", $2, $3, ($4 == "" ? "-" : $4); next } { print }' || exit "$?"
   else
     printf '%s\n' "$RAW_ROWS" || exit "$?"
   fi
