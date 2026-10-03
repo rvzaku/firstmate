@@ -149,7 +149,7 @@ fm_lint_registered_project_guard() {
       fi
     done
     rc=0
-    matches=$(git grep -I -F -i -w -l -- "$name") || rc=$?
+    matches=$(git grep --cached -I -F -i -w -l -- "$name") || rc=$?
     case "$rc" in
       0)
         while IFS= read -r file; do
