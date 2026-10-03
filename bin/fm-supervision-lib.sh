@@ -38,7 +38,10 @@ fm_sup_stat_mtime() {
 #   FM_SUP_NEEDED         true/false - in-flight work, an X-mode relay poll, a
 #                         registered event source (a source is a wait on an
 #                         external process, not a task, so it has no metadata),
-#                         or a registered custom check
+#                         a registered custom check, or authorized pending backlog
+#                         work or its next eligibility deadline
+#   FM_SUP_BACKLOG        true/false - pending work, a deadline, or read uncertainty
+#   FM_SUP_BACKLOG_DETAIL bounded configured-backlog readiness snapshot
 #   FM_SUP_WATCHER_FRESH  true/false - a watcher beacon within the grace window
 #   FM_SUP_BEACON_DESC    human-readable beacon age, for banners ("never" if absent)
 #   FM_SUP_QUEUE_PENDING  true/false - state/.wake-queue has unread records
@@ -51,6 +54,8 @@ fm_supervision_status() {
   FM_SUP_WATCHER_FRESH=false
   FM_SUP_BEACON_DESC=never
   FM_SUP_QUEUE_PENDING=false
+  FM_SUP_BACKLOG=false
+  FM_SUP_BACKLOG_DETAIL=
 
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
@@ -72,10 +77,19 @@ fm_supervision_status() {
     [ -e "$state/$id.check-trust" ] || continue
     FM_SUP_CHECKS=$((FM_SUP_CHECKS + 1))
   done
+  local readiness_bin home
+  readiness_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-backlog-ready.sh"
+  home=${FM_HOME:-${state%/*}}
+  if [ -x "$readiness_bin" ]; then
+    FM_SUP_BACKLOG_DETAIL=$(FM_HOME="$home" FM_STATE_OVERRIDE="$state" "$readiness_bin") \
+      || FM_SUP_BACKLOG_DETAIL="uncertainty: backlog readiness reader failed"
+    [ -z "$FM_SUP_BACKLOG_DETAIL" ] || FM_SUP_BACKLOG=true
+  fi
   if [ "$FM_SUP_IN_FLIGHT" -gt 0 ] \
     || [ -f "$state/x-watch.check.sh" ] \
     || [ "$FM_SUP_SOURCES" -gt 0 ] \
-    || [ "$FM_SUP_CHECKS" -gt 0 ]; then
+    || [ "$FM_SUP_CHECKS" -gt 0 ] \
+    || [ "$FM_SUP_BACKLOG" = true ]; then
     FM_SUP_NEEDED=true
   fi
 

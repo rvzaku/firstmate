@@ -2194,6 +2194,75 @@ test_hook_no_afk_ignores_poll_derived_grace() {
   pass "fm-turnend-guard: with away mode off, the poll-derived grace never applies"
 }
 
+test_predicate_pending_backlog() {
+  local home="$TMP_ROOT/pred-backlog" snapshot
+  command -v tasks-axi >/dev/null 2>&1 || { echo 'skip: tasks-axi unavailable (pending supervision)'; return; }
+  mkdir -p "$home/state" "$home/config" "$home/data"
+  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" add ready-task 'Authorized work' --kind ship >/dev/null || fail "could not add task"
+  FM_HOME="$home" fm_supervision_unhealthy "$home/state" || fail "queue-only authorized work did not require supervision"
+  touch "$home/state/ready-task.meta"
+  snapshot=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-ready.sh") || fail "could not read owned task readiness"
+  [ -z "$snapshot" ] || fail "an existing worker became ready for duplicate dispatch"
+  rm -f "$home/state/ready-task.meta"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" hold ready-task --reason 'scheduled work' --kind future --until 2099-01-01 >/dev/null || fail "could not date-gate task"
+  FM_HOME="$home" fm_supervision_needed "$home/state" || fail "next eligibility deadline did not require supervision"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" hold ready-task --reason 'unresolved decision' --kind captain --until 2000-01-01 >/dev/null || fail "could not hold task"
+  FM_HOME="$home" fm_supervision_needed "$home/state" && fail "expired captain hold became authorized work"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" hold ready-task --reason 'scheduled work' --kind future --until 2000-01-01 >/dev/null || fail "could not expire gate"
+  FM_HOME="$home" fm_supervision_needed "$home/state" || fail "expired time gate did not require supervision"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" add dependency 'Captain dependency' --kind captain >/dev/null || fail "could not add dependency"
+  FM_HOME="$home" "$ROOT/bin/fm-tasks-axi.sh" block ready-task --by dependency >/dev/null || fail "could not block task"
+  FM_HOME="$home" fm_supervision_needed "$home/state" && fail "real dependency became dispatchable"
+  mkdir -p "$home/empty/data"
+  cp "$ROOT/.tasks.toml" "$home/empty/.tasks.toml"
+  snapshot=$(FM_HOME="$home/empty" PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash "$ROOT/bin/fm-backlog-ready.sh") || fail "bounded reader failed under system Bash"
+  [ -z "$snapshot" ] || fail "an absent backlog became readiness uncertainty under system Bash"
+  pass "authorized pending work and future deadlines require supervision, while unresolved decisions stay held"
+}
+
+test_hook_pending_backlog() {
+  local dir out status dependency
+  command -v tasks-axi >/dev/null 2>&1 || { echo 'skip: tasks-axi unavailable (pending hook)'; return; }
+  dir=$(make_primary_dir "$TMP_ROOT/hook-backlog")
+  mkdir -p "$dir/data" "$dir/config"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  for dependency in fm-backlog-ready.sh fm-tasks-axi-lib.sh fm-backlog-transition-lib.sh fm-timeout-lib.sh fm-pr-lib.sh; do
+    cp "$ROOT/bin/$dependency" "$dir/bin/$dependency"
+  done
+  printf '## In flight\n\n## Queued\n\n- [ ] authorized - Ready work (kind: ship)\n\n## Done\n' > "$dir/data/backlog.md"
+  out=$(run_hook "$dir" false); status=$?
+  expect_code 2 "$status" "queue-only authorized work must block a blind turn end"
+  assert_contains "$out" 'Pending backlog work or its eligibility deadline needs supervision' "queue-only banner missing"
+  assert_not_contains "$out" 'X-mode relay polling needs supervision' "queue-only banner falsely named relay"
+  pass "the real turn-end hook blocks queue-only work with a backlog-specific banner"
+}
+
+test_bounded_configured_backlog() {
+  local home="$TMP_ROOT/pred-external" out started
+  mkdir -p "$home/data" "$home/fakebin"
+  printf 'backend = "beads"\n' > "$home/.tasks.toml"
+  cat > "$home/fakebin/tasks-axi" <<'SH'
+#!/usr/bin/env bash
+[ -z "${TASKS_AXI_FILE:-}" ] || exit 2
+case "$*" in *--file*) exit 2 ;; esac
+if [ "${FM_READY_TEST_STALL:-0}" = 1 ]; then sleep 30; exit; fi
+printf 'count: 1\ntasks[1]{id,state,kind,repo,title,blocked,held,hold_kind,hold_until}:\n  external,queued,ship,sample,Ready,no,no,"-","-"\n'
+SH
+  chmod +x "$home/fakebin/tasks-axi"
+  out=$(PATH="$home/fakebin:$PATH" TASKS_AXI_FILE=foreign FM_HOME="$home" "$ROOT/bin/fm-backlog-ready.sh")
+  assert_equals "$(printf 'ready\texternal')" "$out" "configured adapter was replaced with a markdown read"
+  started=$(date +%s)
+  out=$(PATH="$home/fakebin:$PATH" FM_READY_TEST_STALL=1 FM_READY_READ_TIMEOUT=1 FM_HOME="$home" "$ROOT/bin/fm-backlog-ready.sh")
+  [ "$(( $(date +%s) - started ))" -lt 5 ] || fail "backlog read exceeded its bound"
+  assert_contains "$out" uncertainty "timed-out backlog read did not disclose uncertainty"
+  pass "readiness uses the configured adapter, clears foreign file pins, and bounds a stalled read"
+}
+
+test_predicate_pending_backlog
+test_hook_pending_backlog
+test_bounded_configured_backlog
 test_predicate_healthy_no_inflight
 test_predicate_unhealthy_no_beacon
 test_predicate_unhealthy_stale_beacon

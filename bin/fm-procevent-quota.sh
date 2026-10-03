@@ -2,12 +2,12 @@
 # Quota-exhaustion process-event adapter.
 #
 # Usage:
-#   fm-procevent-quota.sh arm [--interval <secs>] [--threshold <percent>] [--provider <provider>]
-#   fm-procevent-quota.sh poll [--interval <secs>] [--threshold <percent>] [--provider <provider>] [--timeout <secs>]
+#   fm-procevent-quota.sh arm [--interval <secs>] [--threshold <percent>] [--provider <provider>] [--direction depletion|recovery]
+#   fm-procevent-quota.sh poll [--interval <secs>] [--threshold <percent>] [--provider <provider>] [--timeout <secs>] [--direction depletion|recovery]
 #   fm-procevent-quota.sh classify <result-file>
 #   fm-procevent-quota.sh terminal <result-file>
 #   fm-procevent-quota.sh source-id
-#   fm-procevent-quota.sh retire [--provider <provider>]
+#   fm-procevent-quota.sh retire [--provider <provider>] [--direction depletion|recovery]
 #
 # arm        Register a recurring quota-axi --json poll that wakes firstmate
 #            when the tracked provider's effectivePercentRemaining drops below
@@ -18,7 +18,11 @@
 # poll       The blocking child the generic runner executes; never run this
 #            directly in a conversational turn. It polls `quota-axi --json`
 #            until quota drops below the threshold or an error stops the watch.
-# classify   Print the captured outcome class: low, exhausted, error, or unknown.
+# recovery   With --direction recovery, wake only when known headroom reaches
+#            the threshold without an exhausted or low applicable scope. Use
+#            this direction for an explicit quota-recovery wait. Unknown quota
+#            keeps polling and is disclosed, never classified as recovered.
+# classify   Print low, exhausted, recovered, error, or unknown.
 # terminal   Every quota poll is terminal because the source fires at most once.
 # source-id  Print the canonical source id.
 # retire     Stop the aggregate watch, or the matching provider watch when
@@ -27,6 +31,7 @@
 # The canonical source id is `quota` for the aggregate tracked provider.
 # A provider named with --provider sets the tracked provider and the source id
 # becomes `quota-<provider>`.
+# A recovery watch appends `-recovery` to its source id.
 #
 # Snapshots may be quota-axi schema 5 or 6 (bin/fm-quota-axi-lib.sh owns the
 # validator). Both watches read every matching account row independently,
@@ -57,6 +62,7 @@ SOURCE_ID_BASE=quota
 
 CANONICAL_SOURCE_ID=
 PROVIDER=
+DIRECTION=depletion
 
 usage() {
   local status=${1:-2}
@@ -79,6 +85,11 @@ resolve_provider() {
     CANONICAL_SOURCE_ID=$SOURCE_ID_BASE
     PROVIDER=
   fi
+  case "$DIRECTION" in
+    depletion) ;;
+    recovery) CANONICAL_SOURCE_ID="$CANONICAL_SOURCE_ID-recovery" ;;
+    *) die "--direction needs depletion or recovery" ;;
+  esac
   fm_procevent_source_id_valid "$CANONICAL_SOURCE_ID" || die "source id is not path-safe: $CANONICAL_SOURCE_ID"
 }
 
@@ -176,6 +187,7 @@ cmd_arm() {
       --interval)  positive_number "${2-}" || die "--interval needs a positive number"; interval=$2; shift 2 ;;
       --threshold) valid_percent "${2-}" || die "--threshold needs a percent 0-100"; threshold=$2; shift 2 ;;
       --provider)  [ -n "${2-}" ] || die "--provider needs a value"; resolve_provider "$2"; shift 2 ;;
+      --direction) [ "$#" -ge 2 ] || die "--direction needs depletion or recovery"; DIRECTION=$2; shift 2 ;;
       *) usage ;;
     esac
   done
@@ -185,7 +197,7 @@ cmd_arm() {
   timeout=$(perl -e 'print int($ARGV[0] * 0.8 + 0.5)' "$interval") || timeout=30
   [ "$timeout" -ge 5 ] || timeout=5
   "$SCRIPT_DIR/fm-procevent.sh" register quota "$CANONICAL_SOURCE_ID" \
-    -- "$SCRIPT_DIR/fm-procevent-quota.sh" poll --interval "$interval" --threshold "$threshold" --provider "$PROVIDER" --timeout "$timeout" || exit 1
+    -- "$SCRIPT_DIR/fm-procevent-quota.sh" poll --interval "$interval" --threshold "$threshold" --provider "$PROVIDER" --timeout "$timeout" --direction "$DIRECTION" || exit 1
   printf 'armed: %s\n' "$CANONICAL_SOURCE_ID"
   printf 'provider: %s\n' "${PROVIDER:-(aggregate)}"
   printf 'threshold: %s%%\n' "$threshold"
@@ -203,6 +215,7 @@ cmd_poll() {
       --threshold) [ "$#" -ge 2 ] || die "--threshold needs a percent 0-100"; threshold=$2; shift 2 ;;
       --provider)  [ "$#" -ge 2 ] || die "--provider needs a value"; PROVIDER=$2; shift 2 ;;
       --timeout)   [ "$#" -ge 2 ] || die "--timeout needs a positive integer"; timeout=$2; shift 2 ;;
+      --direction) [ "$#" -ge 2 ] || die "--direction needs depletion or recovery"; DIRECTION=$2; shift 2 ;;
       *) usage ;;
     esac
   done
@@ -221,9 +234,19 @@ cmd_poll() {
       exit 0
     fi
     status=$(condition_status "$json" "$PROVIDER" "$threshold")
+    if [ "$DIRECTION" = recovery ] && [ "$status" != error ]; then
+      if [ "$status" != healthy ] || ! printf '%s\n' "$json" | jq -e --arg provider "$PROVIDER" '
+        any(.providers[] | select($provider == "" or .provider == $provider)
+          | .quotaSemantics.effectiveAvailability[]?; .status == "known")
+      ' >/dev/null; then
+        sleep "$interval"
+        continue
+      fi
+      status=recovered
+    fi
     case "$status" in
       healthy) sleep "$interval"; continue ;;
-      low|exhausted) : ;;
+      low|exhausted|recovered) : ;;
       *) status=error ;;
     esac
     detail=$(details "$json" "$PROVIDER")
@@ -231,6 +254,9 @@ cmd_poll() {
     printf 'status: %s\n' "$status"
     printf 'detail: %s\n' "$detail"
     printf 'condition_polls: %s\n' "$polls"
+    if [ "$status" = recovered ]; then
+      printf 'action: re-evaluate authorized pending work and dispatch profiles; retain attended limits, decisions, dependencies and away spend caps; unmeasured quota remains unknown\n'
+    fi
     exit 0
   done
 }
@@ -244,7 +270,7 @@ cmd_classify() {
     /^status: / { sub(/^status: /, ""); print; exit }
   ' "$file")
   case "$status" in
-    low|exhausted|error) printf '%s\n' "$status" ;;
+    low|exhausted|recovered|error) printf '%s\n' "$status" ;;
     *) printf 'unknown\n' ;;
   esac
 }
@@ -261,6 +287,7 @@ cmd_retire() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --provider) [ -n "${2-}" ] || die "--provider needs a value"; provider=$2; shift 2 ;;
+      --direction) [ "$#" -ge 2 ] || die "--direction needs depletion or recovery"; DIRECTION=$2; shift 2 ;;
       -*) usage ;;
       *) [ -z "$provider" ] || usage; provider=$1; shift ;;
     esac

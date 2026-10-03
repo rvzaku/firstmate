@@ -107,6 +107,18 @@
 #                          joined with `;` when more than one surfaces in a cycle
 #   check: rejected unauthenticated state checks: <paths>
 #                          unsafe state checks were refused without execution
+#   check: recurring check failed: <id> exit=<status> timeout=<bool> ...
+#                          one durable wake per custom-check failure episode;
+#                          <id>.check-result.json retains start, finish, status,
+#                          timeout, and next due time. Successful empty output is
+#                          quiet and success clears the failure episode.
+#   check: ready-work newly eligible: <ids> overdue beyond <seconds>s: <ids>
+#                          configured-backlog candidates need ordinary intake;
+#                          authority and quota are never inferred by this wake.
+#                          FM_READY_INTERVAL defaults to 60 seconds and
+#                          FM_READY_DISPATCH_DELAY to 300 seconds. Each eligible
+#                          episode wakes once initially and once after the delay.
+#                          bin/fm-backlog-ready.sh owns bounded read parameters.
 #   check: rejected unauthenticated PR poll retirement receipts: <paths>
 #                          invalid pending retirements were preserved without
 #                          running a check or removing poll artifacts
@@ -286,6 +298,10 @@ HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
 HEARTBEAT_MAX=${FM_HEARTBEAT_MAX:-7200}  # heartbeat backoff cap
 CHECK_INTERVAL=${FM_CHECK_INTERVAL:-300}  # seconds between *.check.sh sweeps
 CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
+READY_INTERVAL=${FM_READY_INTERVAL:-60}
+READY_DISPATCH_DELAY=${FM_READY_DISPATCH_DELAY:-300}
+case "$READY_INTERVAL" in ''|*[!0-9]*|0) READY_INTERVAL=60 ;; esac
+case "$READY_DISPATCH_DELAY" in ''|*[!0-9]*|0) READY_DISPATCH_DELAY=300 ;; esac
 HOME_SUMMARY_INTERVAL=${FM_HOME_SUMMARY_INTERVAL:-300}
 case "$HOME_SUMMARY_INTERVAL" in
   ''|*[!0-9]*|0) HOME_SUMMARY_INTERVAL=300 ;;
@@ -2083,13 +2099,15 @@ procevent_surface_queued() {
 run_check_process() {
   local c=$1
   shift
+  # shellcheck disable=SC2016
+  set -- bash -c 'bash "$@"; rc=$?; [ -z "${FM_CHECK_EXIT_FILE:-}" ] || printf "%s\n" "$rc" > "$FM_CHECK_EXIT_FILE"; exit "$rc"' _ "$c" "$@"
   if [ "${FM_CHECK_FORCE_FALLBACK:-0}" != 1 ] && command -v timeout >/dev/null 2>&1; then
-    exec timeout "$CHECK_TIMEOUT" bash "$c" "$@"
+    exec timeout --kill-after=1 "$CHECK_TIMEOUT" "$@"
   elif [ "${FM_CHECK_FORCE_FALLBACK:-0}" != 1 ] && command -v gtimeout >/dev/null 2>&1; then
-    exec gtimeout "$CHECK_TIMEOUT" bash "$c" "$@"
+    exec gtimeout --kill-after=1 "$CHECK_TIMEOUT" "$@"
   else
     # shellcheck disable=SC2016  # single quotes are deliberate: Perl expands its own variables.
-    exec perl -e 'my $t = shift; my $owned = shift; my $pid = fork; die "fork failed" unless defined $pid; if (!$pid) { setpgrp(0, 0) unless $owned; exec @ARGV } my $group = $owned ? getpgrp(0) : $pid; my $stop = sub { $SIG{HUP} = $SIG{INT} = $SIG{TERM} = "IGNORE"; kill "TERM", -$group; select undef, undef, undef, 0.2; kill "KILL", -$group; waitpid $pid, 0; exit 124 }; local $SIG{ALRM} = $stop; local $SIG{HUP} = $stop; local $SIG{INT} = $stop; local $SIG{TERM} = $stop; alarm $t; waitpid $pid, 0; exit($? >> 8)' "$CHECK_TIMEOUT" "${FM_CHECK_OWNED_GROUP:-0}" bash "$c" "$@"
+    exec perl -e 'my $t = shift; my $owned = shift; my $pid = fork; die "fork failed" unless defined $pid; if (!$pid) { setpgrp(0, 0) unless $owned; exec @ARGV } my $group = $owned ? getpgrp(0) : $pid; my $stop = sub { $SIG{HUP} = $SIG{INT} = $SIG{TERM} = "IGNORE"; kill "TERM", -$group; select undef, undef, undef, 0.2; kill "KILL", -$group; waitpid $pid, 0; exit 124 }; local $SIG{ALRM} = $stop; local $SIG{HUP} = $stop; local $SIG{INT} = $stop; local $SIG{TERM} = $stop; alarm $t; waitpid $pid, 0; my $status = $?; exit(($status & 127) ? 128 + ($status & 127) : $status >> 8)' "$CHECK_TIMEOUT" "${FM_CHECK_OWNED_GROUP:-0}" "$@"
   fi
 }
 
@@ -2100,12 +2118,15 @@ run_check() {
 FM_ACTIVE_CHECK_PID=
 FM_ACTIVE_CHECK_PGID=
 FM_CHECK_OUTPUT=
+FM_CHECK_EXIT_FILE=
 FM_CHECK_RESULT=
 FM_CHECK_SIGNAL_PENDING=
 
 fm_check_output_cleanup() {
   [ -z "$FM_CHECK_OUTPUT" ] || rm -f -- "$FM_CHECK_OUTPUT"
+  [ -z "$FM_CHECK_EXIT_FILE" ] || rm -f -- "$FM_CHECK_EXIT_FILE"
   FM_CHECK_OUTPUT=
+  FM_CHECK_EXIT_FILE=
 }
 
 fm_active_check_stop() {
@@ -2151,8 +2172,13 @@ run_check_capture() {
   local pgid
   fm_check_output_cleanup
   FM_CHECK_RESULT=
+  FM_CHECK_EXIT_STATUS=0
+  FM_CHECK_STARTED=$(date +%s)
   FM_CHECK_OUTPUT=$(mktemp "$STATE/.fm-check-output.XXXXXX") || return 1
+  FM_CHECK_EXIT_FILE=$(mktemp "$STATE/.fm-check-exit.XXXXXX") || { fm_check_output_cleanup; return 1; }
+  export FM_CHECK_EXIT_FILE
   chmod 0600 "$FM_CHECK_OUTPUT" || { fm_check_output_cleanup; return 1; }
+  chmod 0600 "$FM_CHECK_EXIT_FILE" || { fm_check_output_cleanup; return 1; }
   FM_CHECK_SIGNAL_PENDING=
   # Defer stop signals only until the check's process group is recorded for
   # watcher_cleanup. Keep command substitutions out of this window: bash 5.2
@@ -2171,11 +2197,39 @@ run_check_capture() {
     fm_check_output_cleanup
     return 1
   fi
-  wait "$FM_ACTIVE_CHECK_PID" 2>/dev/null || true
+  wait "$FM_ACTIVE_CHECK_PID" 2>/dev/null || FM_CHECK_EXIT_STATUS=$?
+  FM_CHECK_FINISHED=$(date +%s)
+  FM_CHECK_TIMED_OUT=false
+  case "$FM_CHECK_EXIT_STATUS" in
+    124|137) [ -s "$FM_CHECK_EXIT_FILE" ] || FM_CHECK_TIMED_OUT=true ;;
+  esac
   FM_ACTIVE_CHECK_PID=
   fm_active_check_stop || return 1
   FM_CHECK_RESULT=$(cat "$FM_CHECK_OUTPUT" 2>/dev/null || true)
   fm_check_output_cleanup
+}
+
+custom_check_outcome() {
+  local id=$1 timed_out=$FM_CHECK_TIMED_OUT tmp reason
+  tmp=$(mktemp "$STATE/.check-result.XXXXXX") || return 1
+  chmod 0600 "$tmp" || return 1
+  jq -n --argjson started "$FM_CHECK_STARTED" --argjson finished "$FM_CHECK_FINISHED" \
+    --argjson status "$FM_CHECK_EXIT_STATUS" --argjson timed_out "$timed_out" \
+    --argjson interval "$CHECK_INTERVAL" \
+    '{started:$started,finished:$finished,exit_status:$status,timed_out:$timed_out,next_due:($finished+$interval)}' \
+    > "$tmp" && mv -f "$tmp" "$STATE/$id.check-result.json" || return 1
+  if [ "$FM_CHECK_EXIT_STATUS" -eq 0 ]; then
+    rm -f "$STATE/.check-failure-$id"
+    return 0
+  fi
+  if [ ! -e "$STATE/.check-failure-$id" ]; then
+    reason="check: recurring check failed: $id exit=$FM_CHECK_EXIT_STATUS timeout=$timed_out started=$FM_CHECK_STARTED finished=$FM_CHECK_FINISHED"
+    fm_wake_append check "check-failure:$id" "$reason" || return 1
+    printf '%s\n' "$FM_CHECK_STARTED" > "$STATE/.check-failure-$id" || return 1
+    touch "$STATE/.last-check"
+    wake "$reason"
+  fi
+  out=
 }
 
 # 0 when any signaled status file carries a captain-relevant event in the bytes
@@ -2488,6 +2542,60 @@ home_summary_refresh_detached() {
   HOME_SUMMARY_PID=$!
 }
 
+backlog_readiness_tick() {
+  local snapshot class id deadline marker started phase now tmp ready_ids='' overdue_ids='' reason
+  [ "$(age_of "$STATE/.last-ready-scan")" -ge "$READY_INTERVAL" ] || return 0
+  snapshot=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-backlog-ready.sh") || return 1
+  now=$(date +%s)
+  if ! printf '%s\n' "$snapshot" | grep -q '^uncertainty'; then
+    for marker in "$STATE"/.ready-work-*; do
+      [ -f "$marker" ] || continue
+      id=${marker##*/.ready-work-}
+      if ! printf '%s\n' "$snapshot" | grep -Fx "$(printf 'ready\t%s' "$id")" >/dev/null; then
+        rm -f "$marker"
+      fi
+    done
+  fi
+  while IFS=$'\t' read -r class id deadline; do
+    [ "$class" = ready ] || continue
+    marker="$STATE/.ready-work-$id"
+    if [ ! -e "$marker" ]; then
+      ready_ids="$ready_ids $id"
+    else
+      read -r started phase < "$marker" || return 1
+      case "$started" in ''|*[!0-9]*) return 1 ;; esac
+      if [ "$phase" = new ] && [ "$((now - started))" -ge "$READY_DISPATCH_DELAY" ]; then
+        overdue_ids="$overdue_ids $id"
+      fi
+    fi
+  done <<EOF
+$snapshot
+EOF
+  touch "$STATE/.last-ready-scan"
+  if [ -n "$ready_ids$overdue_ids" ]; then
+    reason="check: ready-work newly eligible:$ready_ids overdue beyond ${READY_DISPATCH_DELAY}s:$overdue_ids; resolve authority, attended limits, dependencies, away spend caps and dispatch profiles before launch; quota unknown until intake"
+    fm_wake_append check ready-work "$reason" || return 1
+    for id in $ready_ids $overdue_ids; do
+      phase=new
+      case " $overdue_ids " in *" $id "*) phase=overdue ;; esac
+      tmp=$(mktemp "$STATE/.ready-record.XXXXXX") || return 1
+      printf '%s %s\n' "$now" "$phase" > "$tmp" \
+        && mv -f "$tmp" "$STATE/.ready-work-$id" || return 1
+    done
+    wake "$reason"
+  fi
+  if printf '%s\n' "$snapshot" | grep -q '^uncertainty'; then
+    if [ ! -e "$STATE/.backlog-readiness-uncertainty" ]; then
+      reason="check: backlog readiness uncertainty: $(printf '%s\n' "$snapshot" | sed -n 's/^uncertainty[[:space:]]//p')"
+      fm_wake_append check backlog-readiness "$reason" || return 1
+      touch "$STATE/.backlog-readiness-uncertainty"
+      wake "$reason"
+    fi
+  else
+    rm -f "$STATE/.backlog-readiness-uncertainty"
+  fi
+}
+
 RECONCILE_REQUEST_PID=
 reconcile_requests_pending() {
   local request
@@ -2673,6 +2781,8 @@ while :; do
     home_summary_refresh_detached
   fi
 
+  backlog_readiness_tick || exit 1
+
   # Bearings publishes reconcile asks as local one-shot request files and
   # returns before any mate delivery. Supervision owns their later delivery;
   # a skipped or failed request remains durable for another poll.
@@ -2780,6 +2890,7 @@ while :; do
           run_check_capture "$custom_snapshot" || exit 1
           out=$FM_CHECK_RESULT
           fm_custom_check_snapshot_cleanup
+          custom_check_outcome "$id" || exit 1
         else
           fm_custom_check_snapshot_cleanup
           rejected_checks="$rejected_checks $c"

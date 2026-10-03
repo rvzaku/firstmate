@@ -148,7 +148,7 @@ done
 printf 'blocked [key=fixture-dependency]: waiting for the fixture dependency\n' \
   >> "$HOME_DIR/state/ledger-task.status"
 wait_for_ledger_generation "$NOW_TWO" \
-  || fail "a status append did not refresh the ledger within the watcher cadence"
+  || fail "a status append did not refresh the ledger within the watcher cadence: $(cat "$TMP_ROOT/watch.out" "$TMP_ROOT/watch.err" "$HOME_DIR/state/.home-summary-refresh.log" 2>/dev/null)"
 wait "$WATCH_PID" >/dev/null 2>&1 || true
 WATCH_PID=
 
@@ -449,6 +449,14 @@ cmp -s "$TMP_ROOT/before-best-effort.json" "$HOME_DIR/state/home-summary.json" \
 grep -F 'summary producer failed' "$HOME_DIR/state/.home-summary-refresh.log" >/dev/null \
   || fail "best-effort refresh did not log its failure"
 pass "best-effort publication logs and continues"
+failure_wakes=$(grep -c 'check: home-summary refresh failed:' "$HOME_DIR/state/.wake-queue" || true)
+[ "$failure_wakes" -eq 1 ] || fail "stale summary failure produced $failure_wakes wakes"
+PATH="$FAILBIN:$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$HOME_DIR" "$WRITER" --best-effort \
+  || fail "repeated summary failure changed caller outcome"
+[ "$(grep -c 'check: home-summary refresh failed:' "$HOME_DIR/state/.wake-queue")" -eq 1 ] || fail "summary failure episode woke twice"
+run_writer "$NOW_THREE" "$EPOCH_THREE" || fail "summary did not recover"
+[ ! -e "$HOME_DIR/state/.home-summary-failure" ] || fail "successful summary did not clear failure episode"
+pass "a stale summary failure wakes once and successful publication clears the episode"
 
 LOCK_MARKER="$TMP_ROOT/lock-held"
 rm -f "$HOME_DIR/state/.home-summary-refresh.log"
