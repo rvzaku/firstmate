@@ -176,7 +176,10 @@ fm_lint_registered_project_guard() {
   [ "$found" -eq 0 ]
 }
 
-fm_lint_registered_project_guard || exit 1
+case "${1:-}" in
+  --internal-worker|--internal-root|--internal-timed) ;;
+  *) fm_lint_registered_project_guard || exit 1 ;;
+esac
 
 # The sibling timeout library supplies the shared group-kill watchdog that
 # bounds each root when FM_LINT_REQUIRE_BOUNDS=1 requires it; without the
