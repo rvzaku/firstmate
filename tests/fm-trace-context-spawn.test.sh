@@ -20,6 +20,9 @@ Exercise trace propagation for $2.
 
 ## Firstmate spec
 Verify the spawned process receives the expected trace context.
+Intent check: clear: the fixture defines the expected trace propagation behavior.
+Observable result: the spawned process receives the expected trace context.
+Verification command: run tests/fm-trace-context-spawn.test.sh.
 EOF
 }
 

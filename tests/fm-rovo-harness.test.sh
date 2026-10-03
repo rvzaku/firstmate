@@ -148,6 +148,9 @@ Exercise Rovo dispatch.
 
 ## Firstmate spec
 Verify launch and delivery behavior.
+Intent check: clear: the fixture defines the expected Rovo launch behavior.
+Observable result: the Rovo launch follows the selected delivery behavior.
+Verification command: run tests/fm-rovo-harness.test.sh.
 EOF
   printf 'rovo\n' > "$home/config/crew-harness"
   fm_git_worktree "$proj" "$wt" "wt-$name"

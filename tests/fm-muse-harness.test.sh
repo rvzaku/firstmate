@@ -140,6 +140,9 @@ Exercise Muse dispatch.
 
 ## Firstmate spec
 Verify the Muse harness behavior under test.
+Intent check: clear: the fixture defines the expected harness behavior.
+Observable result: the Muse launch follows the selected harness behavior.
+Verification command: run tests/fm-muse-harness.test.sh.
 EOF
   fm_git_worktree "$proj" "$wt" "fm/$id"
   touch "$home/state/.last-watcher-beat"

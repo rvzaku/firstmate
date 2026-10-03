@@ -53,6 +53,9 @@ Exercise backend dispatch for $2.
 
 ## Firstmate spec
 Verify backend selection without changing task intent.
+Intent check: clear: the fixture defines the expected backend selection behavior.
+Observable result: the spawn record names the selected backend.
+Verification command: run tests/fm-backend.test.sh.
 EOF
 }
 
