@@ -2796,6 +2796,7 @@ test_retained_row_artifacts_survive_captain_answers() {
     "project=$local_repo" "harness=codex" "kind=ship" "mode=local-only" \
     "spawn_gen=fixture-$local_id"
   printf 'done: local merge ready\n' > "$home/state/$local_id.status"
+  fm_test_validation_receipt "$home/state" "$local_id" "$(git -C "$local_wt" rev-parse HEAD)"
   run_captain "$home" hold "$local_id" --reason "captain local merge approval pending" \
     >/dev/null || fail "could not hold the released local merge"
   printf 'Land the approved change locally.\n' > "$home/local-answer.txt"
@@ -3503,6 +3504,7 @@ test_local_merge_entrypoint_separates_an_unreadable_record_from_an_absent_one() 
 
   # No backlog at all: nothing can be held, so the landing proceeds.
   rm "$home/data/backlog.md"
+  fm_test_validation_receipt "$home/state" "$id" "$(git -C "$wt" rev-parse HEAD)"
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_CONFIG_OVERRIDE="$home/config" "$ROOT/bin/fm-merge-local.sh" "$id" \
@@ -3685,6 +3687,7 @@ test_merge_entrypoints_refuse_a_reused_task_incarnation() {
     "worktree=$local_old_wt" "project=$local_old_repo" "harness=codex" \
     "kind=ship" "mode=local-only" "spawn_gen=original-$local_id"
   printf 'done: local merge ready\n' > "$local_home/state/$local_id.status"
+  fm_test_validation_receipt "$local_home/state" "$local_id" "$(git -C "$local_old_wt" rev-parse HEAD)"
 
   local_teardown_ready="$local_home/reuse-teardown-ready"
   local_teardown_release="$local_home/reuse-teardown-release"
@@ -3868,6 +3871,7 @@ SH
     "project=$local_repo" "harness=codex" "kind=ship" "mode=local-only" \
     "spawn_gen=fixture-$local_id"
   printf 'done: local merge ready\n' > "$local_home/state/$local_id.status"
+  fm_test_validation_receipt "$local_home/state" "$local_id" "$(git -C "$local_wt" rev-parse HEAD)"
   run_captain "$local_home" hold "$local_id" \
     --reason "captain local merge approval pending" >/dev/null \
     || fail "could not hold the local teardown-race fixture"

@@ -659,6 +659,14 @@ fm_write_meta() {
   done
 }
 
+fm_test_validation_receipt() { # <state> <id> <head>
+  local state=$1 id=$2 head=$3 gen
+  gen=$(sed -n 's/^spawn_gen=//p' "$state/$id.meta")
+  jq -n --arg id "$id" --arg gen "$gen" --arg head "$head" \
+    '{task_id:$id,spawn_gen:$gen,head:$head,result:"passed",scope:"changed-surface",source:"fixture behavior validation"}' \
+    > "$state/$id.validation.json"
+}
+
 # fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
 # standard kind=secondmate meta block used across the secondmate suites. Window
 # defaults to firstmate:fm-<id>, projects defaults to alpha, and harness defaults

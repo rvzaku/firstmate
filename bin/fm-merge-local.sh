@@ -15,6 +15,9 @@
 # merge, so a captain approval must be recorded as an `answer --release` before
 # this entrypoint is invoked. The lock ends when the fast-forward returns;
 # docs/captain-hold-lifecycle.md owns the accepted merge-to-cleanup residual.
+# Landing also requires the exact commit's changed-surface validation receipt,
+# whose schema and pipeline evidence source are owned by bin/fm-validation-lib.sh.
+# The fast-forward uses that validated SHA rather than a mutable branch name.
 # Usage: fm-merge-local.sh <task-id>
 set -eu
 
@@ -24,6 +27,8 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-validation-lib.sh
+. "$SCRIPT_DIR/fm-validation-lib.sh"
 # shellcheck source=bin/fm-backlog-transition-lib.sh
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
 if [ "$#" -ne 1 ] || ! fm_pr_task_id_valid "$1"; then
@@ -136,7 +141,12 @@ case "$hold_status" in
     ;;
 esac
 merge_status=0
-git -C "$PROJ" merge --ff-only "$BRANCH" >/dev/null || merge_status=$?
+landing_head=$(git -C "$PROJ" rev-parse --verify "refs/heads/$BRANCH^{commit}")
+if ! fm_validation_receipt "$STATE" "$ID" "$META" "$landing_head"; then
+  echo "error: local merge refused: no positive validation at head $landing_head; record $STATE/$ID.validation.json with task_id, spawn_gen, head, result=passed, scope=changed-surface, and source" >&2
+  exit 1
+fi
+git -C "$PROJ" merge --ff-only "$landing_head" >/dev/null || merge_status=$?
 fm_lock_release "$MERGE_CONTROL_LOCK" || true
 MERGE_CONTROL_LOCK=
 [ "$merge_status" -eq 0 ] || exit "$merge_status"

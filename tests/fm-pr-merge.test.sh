@@ -69,6 +69,8 @@ make_case() {
   # rule, so nothing is required unless a case says otherwise.
   write_github_required "$case_dir"
   : > "$case_dir/gh.log"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$fakebin/no-mistakes"
+  chmod +x "$fakebin/no-mistakes"
   # The worktree is a git copy whose HEAD is on a remote-tracking ref, as a
   # pushed ship task's is, so fm-pr-check.sh's named-head gate accepts it when
   # the forge supplies no head (GitLab). No project clone exists on disk.
@@ -2621,6 +2623,7 @@ test_github_red_checks_refuse_and_allow_red_waives_named() {
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" "$head"
   write_github_red_json "$case_dir" "$head" lint
+  fm_test_validation_receipt "$case_dir/state" task-x1 "$head"
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/81 \
     --allow-red lint \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "github-allow-red: named waiver should merge"
@@ -2926,6 +2929,7 @@ test_allow_red_is_refused_while_away() {
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" "$head"
   write_github_red_json "$case_dir" "$head" lint
+  fm_test_validation_receipt "$case_dir/state" task-x1 "$head"
   write_away_record "$case_dir" --words 'merge task-x1 when green'
   mv "$case_dir/state/.afk-contract" "$case_dir/away-record-after-view"
   set +e
@@ -2952,6 +2956,7 @@ test_quiet_record_keeps_merges_attended() {
   mkdir -p "$case_dir/wt" "$case_dir/home"
   add_gh_mocks "$case_dir" "$head"
   write_github_red_json "$case_dir" "$head" lint
+  fm_test_validation_receipt "$case_dir/state" task-x1 "$head"
   FM_AFK_MODE=quiet write_away_record "$case_dir"
   FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" --allow-red lint \
     > "$case_dir/stdout" 2> "$case_dir/stderr" \
@@ -3844,6 +3849,112 @@ test_allow_missing_follows_the_allow_red_rules() {
   pass "fm-pr-merge --allow-missing is single use, attended-only, and GitHub-only like --allow-red"
 }
 
+test_zero_positive_validation_refuses() {
+  local case_dir head variant
+  head=abababababababababababababababababababab
+  for variant in empty missing null skipped neutral waived-red waived-missing old-success; do
+    case_dir=$(make_case "positive-$variant")
+    add_gh_mocks "$case_dir" "$head"
+    write_github_rollup_json "$case_dir" "$head"
+    case "$variant" in
+      missing|null)
+        jq --arg variant "$variant" 'if $variant == "missing" then del(.statusCheckRollup) else .statusCheckRollup=null end' \
+          "$case_dir/github-view.json" > "$case_dir/changed"
+        mv "$case_dir/changed" "$case_dir/github-view.json"
+        ;;
+      skipped) write_github_rollup_json "$case_dir" "$head" "$(check_run ci COMPLETED SKIPPED)" ;;
+      neutral) write_github_rollup_json "$case_dir" "$head" "$(check_run ci COMPLETED NEUTRAL)" ;;
+      waived-red) write_github_red_json "$case_dir" "$head" ci ;;
+      waived-missing) write_github_required "$case_dir" classic:ci ;;
+      old-success)
+        write_github_rollup_json "$case_dir" "$head" \
+          "$(check_run ci COMPLETED SUCCESS 2026-01-01T00:00:00Z)" \
+          "$(check_run ci COMPLETED SKIPPED 2026-01-02T00:00:00Z)"
+        ;;
+    esac
+    case "$variant" in
+      waived-red) run_required_case "$case_dir" 120 --allow-red ci ;;
+      waived-missing) run_required_case "$case_dir" 120 --allow-missing ci ;;
+      *) run_required_case "$case_dir" 120 ;;
+    esac
+    expect_code 1 "$RC" "$variant must refuse without positive validation"
+    assert_grep 'no positive validation at head' "$case_dir/stderr" "$variant did not explain missing evidence"
+    assert_no_grep 'pr merge' "$case_dir/gh.log" "$variant reached merge"
+  done
+  pass "zero positive validation refuses even with a named waiver"
+}
+
+test_positive_validation_receipts() {
+  local case_dir head variant
+  for variant in receipt receipt-skipped receipt-missing stale wrong-task wrong-generation failed skipped-test pipeline pipeline-ci pipeline-other-head pipeline-other-branch receipt-waiver receipt-red; do
+    case_dir=$(make_case "receipt-$variant")
+    head=$(git -C "$case_dir/wt" rev-parse HEAD)
+    add_gh_mocks "$case_dir" "$head"
+    write_github_rollup_json "$case_dir" "$head"
+    jq -n --arg head "$head" \
+      '{task_id:"task-x1",spawn_gen:"",head:$head,result:"passed",scope:"changed-surface",source:"targeted behavior tests"}' \
+      > "$case_dir/state/task-x1.validation.json"
+    case "$variant" in
+      receipt-skipped) write_github_rollup_json "$case_dir" "$head" "$(check_run ci COMPLETED SKIPPED)" ;;
+      receipt-missing)
+        jq 'del(.statusCheckRollup)' "$case_dir/github-view.json" > "$case_dir/changed-view"
+        mv "$case_dir/changed-view" "$case_dir/github-view.json"
+        ;;
+      stale) jq '.head="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' "$case_dir/state/task-x1.validation.json" > "$case_dir/changed" ;;
+      wrong-task) jq '.task_id="other"' "$case_dir/state/task-x1.validation.json" > "$case_dir/changed" ;;
+      wrong-generation) jq '.spawn_gen="older"' "$case_dir/state/task-x1.validation.json" > "$case_dir/changed" ;;
+      failed) jq '.result="failed"' "$case_dir/state/task-x1.validation.json" > "$case_dir/changed" ;;
+      receipt-waiver|receipt-red) write_github_red_json "$case_dir" "$head" ci ;;
+      pipeline*|skipped-test)
+        rm "$case_dir/state/task-x1.validation.json"
+        cat > "$case_dir/fakebin/no-mistakes" <<SH
+#!/usr/bin/env bash
+cat <<EOF
+run:
+  id: run-positive
+  branch: fm/task-x1
+  head: $head
+  status: completed
+outcome: passed-with-skips
+steps[1]{step,status,findings,duration_ms}:
+  test,completed,0,100
+EOF
+SH
+        case "$variant" in
+          skipped-test) sed -i.bak 's/test,completed/test,skipped/' "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-ci) sed -i.bak -e 's/status: completed/status: ci/' -e '/outcome:/d' "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-other-head) sed -i.bak "s/head: $head/head: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/" "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-other-branch) sed -i.bak 's/branch: fm\/task-x1/branch: fm\/other/' "$case_dir/fakebin/no-mistakes" ;;
+        esac
+        chmod +x "$case_dir/fakebin/no-mistakes"
+        ;;
+    esac
+    [ ! -f "$case_dir/changed" ] || mv "$case_dir/changed" "$case_dir/state/task-x1.validation.json"
+    case "$variant" in
+      receipt-waiver) run_required_case "$case_dir" 121 --allow-red ci ;;
+      *) run_required_case "$case_dir" 121 ;;
+    esac
+    case "$variant" in
+      receipt|receipt-skipped|receipt-missing|receipt-waiver|pipeline|pipeline-ci)
+        expect_code 0 "$RC" "$variant should merge: $(cat "$case_dir/stderr")"
+        assert_logged_gh_merge "$case_dir" 121 example/repo --squash
+        assert_grep 'source:' "$case_dir/stderr" "$variant must name the evidence source"
+        case "$variant" in
+          pipeline*) jq -e --arg head "$head" '.head == $head and (.source | startswith("no-mistakes run run-positive"))' \
+            "$case_dir/state/task-x1.validation.json" >/dev/null || fail "pipeline evidence was not recorded on the task" ;;
+        esac
+        ;;
+      *)
+        expect_code 1 "$RC" "$variant should refuse"
+        assert_no_grep 'pr merge' "$case_dir/gh.log" "$variant reached merge"
+        ;;
+    esac
+  done
+  pass "receipts bind to the task and exact head, record pipeline evidence, and preserve red checks"
+}
+
+test_zero_positive_validation_refuses
+test_positive_validation_receipts
 test_help_prints_header_and_succeeds
 test_gitlab_head_override_args_refuse_before_recording
 test_secondmate_merge_reports_upward_once
