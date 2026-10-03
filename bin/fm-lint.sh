@@ -125,6 +125,7 @@ cd "$ROOT" || exit 1
 
 fm_lint_registered_project_guard() {
   local home registry name file found=0
+  local -a shared_files=()
   home=${FM_HOME:-${FM_ROOT_OVERRIDE:-$ROOT}}
   registry=${FM_DATA_OVERRIDE:-$home/data}/projects.md
   [ -e "$registry" ] || return 0
@@ -132,23 +133,28 @@ fm_lint_registered_project_guard() {
     printf 'fm-lint.sh: cannot read the private project registry.\n' >&2
     return 1
   }
+  while IFS= read -r -d '' file; do
+    shared_files+=("$file")
+  done < <(git ls-files -z -- AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
+    .github/workflows/ bin/ .agents/skills/ skills/ docs/ tests/)
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    while IFS= read -r file; do
-      [ -n "$file" ] || continue
+    for file in "${shared_files[@]}"; do
       if grep -Fq -- "$name" "$file" 2>/dev/null; then
         printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
         found=1
       fi
-    done < <(find AGENTS.md bin .agents/skills docs tests -type f -print 2>/dev/null | LC_ALL=C sort)
+    done
   done < <(awk '
-    $1 == "-" {
+    substr($0, 1, 2) == "- " {
       line = substr($0, 3)
       bracket = index(line, " [")
       legacy = index(line, " - ")
+      end = 0
       if (bracket && (!legacy || bracket < legacy)) end = bracket
       else end = legacy
-      if (end) print substr(line, 1, end - 1)
+      if (end) line = substr(line, 1, end - 1)
+      print line
     }
   ' "$registry")
   [ "$found" -eq 0 ]

@@ -166,32 +166,78 @@ test_help_reports_the_complete_interface() {
 }
 
 test_registered_project_guard() {
-  local tmp fake_root home out rc
+  local tmp fake_root home out rc file
   tmp=$(fm_test_tmproot fm-lint-project-guard)
   fake_root="$tmp/repo"
   home="$tmp/home"
-  mkdir -p "$fake_root/bin" "$fake_root/.agents/skills" "$fake_root/docs" \
+  mkdir -p "$fake_root/.github/workflows" "$fake_root/.agents/skills/fixture" \
+    "$fake_root/bin" "$fake_root/docs" "$fake_root/skills/fixture" \
     "$fake_root/tests" "$home/data"
   cp "$LINT" "$fake_root/bin/fm-lint.sh"
-  printf '%s\n' '- synthetic-widget [no-mistakes] - fixture' > "$home/data/projects.md"
+  : > "$fake_root/AGENTS.md"
+  : > "$fake_root/README.md"
+  : > "$fake_root/CONTRIBUTING.md"
+  : > "$fake_root/.tasks.toml"
+  : > "$fake_root/.github/workflows/fixture.yml"
+  : > "$fake_root/bin/fixture.sh"
+  : > "$fake_root/.agents/skills/fixture/SKILL.md"
+  : > "$fake_root/skills/fixture/SKILL.md"
+  : > "$fake_root/docs/fixture.md"
+  : > "$fake_root/tests/fixture.sh"
+  git -C "$fake_root" init -q
+  git -C "$fake_root" add -f -- AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
+    .github/workflows/ bin/ .agents/skills/ skills/ docs/ tests/
+  printf '%s\n' '- synthetic-widget [no-mistakes] - fixture' \
+    '- legacy product - fixture' '- bare-widget' > "$home/data/projects.md"
 
-  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "clean shared tree failed the registered project guard: $out"
   }
   pass "registered project guard passes when no registered name appears in shared files"
 
-  printf '%s\n' 'synthetic-widget' > "$fake_root/docs/fixture.md"
+  for file in AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
+    .github/workflows/fixture.yml bin/fixture.sh \
+    .agents/skills/fixture/SKILL.md skills/fixture/SKILL.md \
+    docs/fixture.md tests/fixture.sh; do
+    printf '%s\n' 'synthetic-widget' > "$fake_root/$file"
+  done
   rc=0
-  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || fail "registered project name in shared docs passed the guard"
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "registered project name in tracked shared material passed the guard"
   assert_contains "$out" 'a registered project name appears in shared tracked material' \
     "guard failure did not explain the violation"
-  assert_contains "$out" 'docs/fixture.md' "guard failure did not identify the shared file"
+  for file in AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
+    .github/workflows/fixture.yml bin/fixture.sh \
+    .agents/skills/fixture/SKILL.md skills/fixture/SKILL.md \
+    docs/fixture.md tests/fixture.sh; do
+    assert_contains "$out" "$file" "guard missed tracked shared file $file"
+    : > "$fake_root/$file"
+  done
   assert_not_contains "$out" 'synthetic-widget' "guard failure exposed a private registry name"
-  pass "registered project guard names the violating shared file without exposing registry contents"
+  pass "registered project guard checks every configured tracked path"
+
+  printf '%s\n' 'bare-widget' > "$fake_root/README.md"
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a bare registered project row passed the guard"
+  assert_contains "$out" 'README.md' "guard missed the bare registry row"
+  : > "$fake_root/README.md"
+
+  printf '%s\n' 'legacy product' > "$fake_root/skills/fixture/SKILL.md"
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a legacy registered project row passed the guard"
+  assert_contains "$out" 'skills/fixture/SKILL.md' "guard missed the legacy registry row"
+  : > "$fake_root/skills/fixture/SKILL.md"
+
+  printf '%s\n' 'synthetic-widget' > "$fake_root/docs/untracked.md"
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+    fail "untracked shared material was included by the registered project guard: $out"
+  }
+  pass "registered project guard ignores untracked shared files"
 
   rm -f "$home/data/projects.md"
-  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "missing private registry did not skip the guard: $out"
   }
   pass "registered project guard skips cleanly when the private registry is absent"
