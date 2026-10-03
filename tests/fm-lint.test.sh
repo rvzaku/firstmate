@@ -165,6 +165,38 @@ test_help_reports_the_complete_interface() {
   pass "fm-lint.sh --help reports the complete executable interface"
 }
 
+test_registered_project_guard() {
+  local tmp fake_root home out rc
+  tmp=$(fm_test_tmproot fm-lint-project-guard)
+  fake_root="$tmp/repo"
+  home="$tmp/home"
+  mkdir -p "$fake_root/bin" "$fake_root/.agents/skills" "$fake_root/docs" \
+    "$fake_root/tests" "$home/data"
+  cp "$LINT" "$fake_root/bin/fm-lint.sh"
+  printf '%s\n' '- synthetic-widget [no-mistakes] - fixture' > "$home/data/projects.md"
+
+  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+    fail "clean shared tree failed the registered project guard: $out"
+  }
+  pass "registered project guard passes when no registered name appears in shared files"
+
+  printf '%s\n' 'synthetic-widget' > "$fake_root/docs/fixture.md"
+  rc=0
+  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "registered project name in shared docs passed the guard"
+  assert_contains "$out" 'a registered project name appears in shared tracked material' \
+    "guard failure did not explain the violation"
+  assert_contains "$out" 'docs/fixture.md' "guard failure did not identify the shared file"
+  assert_not_contains "$out" 'synthetic-widget' "guard failure exposed a private registry name"
+  pass "registered project guard names the violating shared file without exposing registry contents"
+
+  rm -f "$home/data/projects.md"
+  out=$(FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+    fail "missing private registry did not skip the guard: $out"
+  }
+  pass "registered project guard skips cleanly when the private registry is absent"
+}
+
 test_list_files_reports_the_shell_inventory() {
   local listed expected
   # CI=true forces the full canonical set regardless of the ambient branch or
@@ -2027,6 +2059,7 @@ SH
 }
 
 test_help_reports_the_complete_interface
+test_registered_project_guard
 test_list_files_reports_the_shell_inventory
 test_canonical_partitions_preserve_full_lint
 test_fast_mode_disables_extended_analysis

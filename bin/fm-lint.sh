@@ -123,6 +123,39 @@ SELF="$SELF_DIR/fm-lint.sh"
 ROOT="$(cd "$SELF_DIR/.." && pwd -P)"
 cd "$ROOT" || exit 1
 
+fm_lint_registered_project_guard() {
+  local home registry name file found=0
+  home=${FM_HOME:-${FM_ROOT_OVERRIDE:-$ROOT}}
+  registry=${FM_DATA_OVERRIDE:-$home/data}/projects.md
+  [ -e "$registry" ] || return 0
+  [ -r "$registry" ] || {
+    printf 'fm-lint.sh: cannot read the private project registry.\n' >&2
+    return 1
+  }
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      if grep -Fq -- "$name" "$file" 2>/dev/null; then
+        printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
+        found=1
+      fi
+    done < <(find AGENTS.md bin .agents/skills docs tests -type f -print 2>/dev/null | LC_ALL=C sort)
+  done < <(awk '
+    $1 == "-" {
+      line = substr($0, 3)
+      bracket = index(line, " [")
+      legacy = index(line, " - ")
+      if (bracket && (!legacy || bracket < legacy)) end = bracket
+      else end = legacy
+      if (end) print substr(line, 1, end - 1)
+    }
+  ' "$registry")
+  [ "$found" -eq 0 ]
+}
+
+fm_lint_registered_project_guard || exit 1
+
 # The sibling timeout library supplies the shared group-kill watchdog that
 # bounds each root when FM_LINT_REQUIRE_BOUNDS=1 requires it; without the
 # library a required-bounds run refuses in preflight rather than lint uncapped.
