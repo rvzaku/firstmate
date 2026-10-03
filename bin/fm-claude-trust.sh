@@ -33,9 +33,8 @@
 # Code's separate "Allow external CLAUDE.md file imports?" dialog, which
 # `--setting-sources project,local` (firstmate PR 10's minimal worker tool
 # surface) stopped suppressing: it renders whenever a loaded CLAUDE.md chain
-# reaches outside the project tree, including Firstmate's `CLAUDE.md` reaching
-# `AGENTS.md` through task-channel grants. It is gated the same fail-closed way
-# as trust: cursor on "No, disable", no arrow navigation from firstmate's
+# reaches outside the project tree. The import that triggers it in this setup
+# is not established. It is gated the same fail-closed way as trust: cursor on "No, disable", no arrow navigation from firstmate's
 # steering plane. Only worktree mode reaches this
 # second dialog's flags: a secondmate home has no separate "project" entry to
 # carry consent forward from, so its registration stays trust-only.

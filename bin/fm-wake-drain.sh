@@ -21,7 +21,7 @@
 # presentation-path locks (default 10); queue mutation locks remain blocking.
 case "${1:-}" in
   -h|--help)
-    sed -n 's/^# Usage: /Usage: /p; s/^#   /  /p' "$0" | head -n 2
+    sed -n 's/^# Usage: /Usage: /p; s/^#   /  /p' "$0" | head -n 3
     exit 0
     ;;
 esac

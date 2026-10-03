@@ -14,7 +14,7 @@
 # charters still use a single `{TASK}` charter fill. Firstmate may adjust other
 # sections when the task genuinely deviates (e.g. working an existing external
 # PR instead of shipping a new one).
-# A ship or scout's Firstmate spec must state an observable result and the
+# A ship's Firstmate spec must state an observable result and the
 # project's verification command, or state an explicit verification limitation.
 # Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--branch-prefix <prefix>] [--forge <none|gerrit> [--shape squash]] [--herdr-lab]
 #        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab]
