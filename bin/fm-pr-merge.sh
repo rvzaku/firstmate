@@ -143,6 +143,10 @@
 # destination, normal-case deduplication, and at-least-once recovery.
 # A landed merge whose outcome cannot be written is reported loudly rather than
 # misreported as a failed merge.
+if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
+  sed -n 's/^# Usage: /Usage: /p' "$0" | head -n 1
+  exit 0
+fi
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

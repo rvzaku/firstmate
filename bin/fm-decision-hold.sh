@@ -7,6 +7,7 @@
 # in-flight work briefed before the collapse keeps working for one release, and
 # it will be removed in the release after the collapse lands.
 #
+# Usage: fm-decision-hold.sh <id|hold|complete|verify|resolve|answer|decline|repair|answers|bind|unbind|binding> ...
 # Mapping (old -> new):
 #   id <origin> <key>                      -> prints the legacy <origin>-decision-<key> identity
 #   hold <origin> <key> --title --reason [--repo]

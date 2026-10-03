@@ -382,6 +382,38 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
   pass "PR-based DoD draft check uses gh-axi"
 }
 
+test_new_ship_brief_requires_observable_verification() {
+  local brief
+  brief="$TMP_ROOT/ship-verification-brief.md"
+  cat > "$brief" <<'EOF'
+# Task
+## Firstmate spec
+Observable result: a user can see the updated project status.
+Verification command: make check
+EOF
+  fm_brief_ship_verification_valid "$brief" || fail "valid verification fields were refused"
+  cat > "$brief" <<'EOF'
+# Task
+## Firstmate spec
+Observable result: updated status is visible.
+Verification limit: this project has no automated verification command.
+EOF
+  fm_brief_ship_verification_valid "$brief" || fail "explicit verification limitation was refused"
+  cat > "$brief" <<'EOF'
+# Task
+## Firstmate spec
+Observable result: updated status is visible.
+EOF
+  if fm_brief_ship_verification_valid "$brief"; then fail "missing verification was accepted"; fi
+  cat > "$brief" <<'EOF'
+# Task
+## Firstmate spec
+Verification command: make check
+EOF
+  if fm_brief_ship_verification_valid "$brief"; then fail "missing observable result was accepted"; fi
+  pass "new ship brief requires observable verification"
+}
+
 test_scout_done_is_not_gated
 test_unpushed_ship_done_is_refused
 test_no_mistakes_prevalidation_done_is_not_gated
@@ -400,5 +432,6 @@ test_standalone_local_only_needs_project_ref
 test_non_done_lines_are_not_gated
 test_fenced_and_indented_captain_lines_are_not_intent
 test_pr_based_dod_draft_check_uses_gh_axi
+test_new_ship_brief_requires_observable_verification
 
 echo "all fm-dod-lib tests passed"

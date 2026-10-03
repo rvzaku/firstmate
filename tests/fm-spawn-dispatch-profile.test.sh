@@ -1271,6 +1271,35 @@ test_claude_task_launch_carries_control_channel_authority() {
   pass "a claude task launch establishes only Firstmate's task control channels through the system prompt"
 }
 
+test_new_ship_requires_observable_verification_fields() {
+  local rec id out status brief
+  id=profile-verification-contract-z22
+  rec=$(make_spawn_case profile-verification-contract claude "$id")
+  read_case_record "$rec"
+  brief="$HOME_DIR/data/$id/brief.md"
+  cat > "$brief" <<'EOF'
+# Task
+## Captain's intent
+exercise the verification brief contract
+
+## Firstmate spec
+Observable result: the outcome is visible.
+EOF
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "ship spawn accepted a brief with no verification command or limitation"
+  assert_contains "$out" 'must state an Observable result and either a Verification command or an explicit Verification limit' \
+    "verification-contract refusal did not explain the required fields: $out"
+
+  cat >> "$brief" <<'EOF'
+Verification command: run the focused spawn fixture test.
+EOF
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" 2>&1)
+  status=$?
+  expect_code 0 "$status" "ship spawn rejected a complete verification contract"$'\n'"$out"
+  pass "new ship spawn requires observable verification fields"
+}
+
 test_claude_secondmate_launch_omits_task_control_channel_authority() {
   local rec id sm out status launch
   id=profile-secondmate-control-channel-z21b
@@ -1654,6 +1683,8 @@ test_worker_launch_delivers_role_scope() {
       content=$(cat "$brief")
       content=${content//'{TASK}'/brief for $id}
       content=${content//'{FIRSTMATE_SPEC}'/Exercise the spawn behavior under test.}
+      content=${content//'{state the visible or otherwise observable outcome}'/the expected worker launch is visible.}
+      content=${content//'{project command, or replace this line with Verification limit: and state the limitation}'/run the focused spawn fixture test.}
       printf '%s\n' "$content" > "$brief"
     fi
     cp "$HOME_DIR/data/$id/brief.md" "$CASE_DIR/brief-before"
@@ -1942,6 +1973,7 @@ test_claude_permission_mode_invalid_refuses_before_endpoint_or_metadata
 test_non_claude_harness_ignores_claude_permission_mode
 test_non_claude_harness_ignores_config_dir
 test_claude_task_launch_carries_control_channel_authority
+test_new_ship_requires_observable_verification_fields
 test_claude_secondmate_launch_omits_task_control_channel_authority
 test_claude_long_launch_is_delivered_intact
 test_claude_crewmate_launch_carries_the_attribution_policy

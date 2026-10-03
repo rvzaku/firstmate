@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Tear down a finished task: return the treehouse worktree, release the Orca
+# Tear down a finished task.
+# Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
+if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
+  sed -n 's/^# Usage: /Usage: /p' "$0" | head -n 1
+  exit 0
+fi
+# Return the treehouse worktree, release the Orca
 # worktree, or retire a secondmate home; kill the recorded runtime endpoint,
 # clear volatile state, and transition this home's backlog item for ship and
 # scout tasks before reporting success (a secondmate teardown transitions none,
@@ -176,7 +182,6 @@
 # leased home releases its durable treehouse lease so the pool slot is freed,
 # never left leased forever. If the treehouse return fails, teardown leaves the
 # leased home and state in place instead of hiding a still-held lease.
-# Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
 #   checks, and discards secondmate child work for kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.

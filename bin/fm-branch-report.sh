@@ -54,8 +54,9 @@ RECEIPTS="$STATE/.supervision-host-receipts"
 . "$SCRIPT_DIR/fm-afk-contract.sh"
 
 usage() {
+  local status=${1:-2}
   sed -n '/^# Usage:/,/^# --wake/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
-  exit 2
+  exit "$status"
 }
 
 refuse() {
@@ -71,7 +72,7 @@ while [ "$#" -gt 0 ]; do
     --summary) SUMMARY=${2:-}; shift 2 || usage ;;
     --silent) SILENT=${2:-}; shift 2 || usage ;;
     --wake) WAKE=${2:-}; WAKE_SET=1; shift 2 || usage ;;
-    -h|--help) usage ;;
+    -h|--help) usage 0 ;;
     *) usage ;;
   esac
 done

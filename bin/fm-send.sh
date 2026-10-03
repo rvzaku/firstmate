@@ -14,6 +14,11 @@
 # Special keys instead of text: fm-send.sh <target> --key Enter
 # Key support is backend-specific: tmux/herdr support Escape, Enter, and C-c;
 # Orca currently supports Enter and C-c only, and rejects Escape.
+#        fm-send.sh <target> --key <key>
+if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
+  sed -n 's/^# Usage: /Usage: /p; s/^#        /        /p' "$0" | head -n 2
+  exit 0
+fi
 #
 # Two data planes:
 #

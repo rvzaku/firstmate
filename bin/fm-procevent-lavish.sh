@@ -148,7 +148,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 . "$SCRIPT_DIR/fm-procevent-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 2; }
+usage() { local status=${1:-2}; sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit "$status"; }
 
 apply_session_host() {  # <artifact>
   local endpoint
@@ -850,6 +850,7 @@ case "${1-}" in
   answers)   shift; cmd_answers "$@" ;;
   reconciles) shift; cmd_reconciles "$@" ;;
   read)      shift; cmd_read "$@" ;;
-  ''|-h|--help|help) usage ;;
+  -h|--help|help) usage 0 ;;
+  '') usage ;;
   *) die "unknown command: $1" ;;
 esac

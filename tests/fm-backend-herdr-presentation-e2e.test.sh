@@ -403,6 +403,8 @@ $description
 
 ## Firstmate spec
 Verify projected workspace behavior for $id.
+Observable result: the expected workspace state for $id is visible.
+Verification command: run the Herdr presentation end-to-end test.
 EOF
 }
 

@@ -75,6 +75,10 @@ Firstmate adds this skill's load instruction to firstmate-repo briefs by hand in
 
 ## Compatibility and enforcement
 
+When a correction follows a repeated mistake, make the mistake impossible by design first.
+If design cannot prevent it, add a static check for the demonstrated failure, then add a rule or skill when judgment remains, and use style text last.
+Update the existing owner for the check or instruction instead of creating another policy layer.
+
 Before changing shared tracked behavior, review every affected supported primary harness and runtime backend rather than checking only the adapters active in the current fleet.
 Mark an axis not applicable only after inspecting its integration surface, and update the corresponding verification evidence when behavior changes.
 

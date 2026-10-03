@@ -63,6 +63,18 @@
 
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage:
+  fm-mail.sh read
+  fm-mail.sh send <to> <subject> <body | ->
+  fm-mail.sh poll
+  fm-mail.sh status
+EOF
+}
+
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+
 # --- resolve home, env, and endpoints -------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_HOME="${FM_HOME:-}"
@@ -176,15 +188,6 @@ run_py() {
   FM_MAIL_RETRY_POS="$RETRY_POS" FM_MAIL_TURN="$TURN" \
   FM_MAIL_POLL_MAX_WAKES="$MAIL_MAX_WAKES" \
     "$PY" "$PY_BIN" "$@"
-}
-
-usage() {
-  cat <<'EOF'
-fm-mail.sh read
-fm-mail.sh send <to> <subject> <body | ->
-fm-mail.sh poll
-fm-mail.sh status
-EOF
 }
 
 mail_seen() {

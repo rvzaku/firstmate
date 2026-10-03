@@ -6,6 +6,9 @@
 # newer branch outcome, OPEN DECISIONS, captain-call record divergence, and on
 # a supervision-host home the supervision session's new and unprocessed
 # outcomes (BRANCH OUTCOMES), then assert liveness.
+# Usage: fm-wake-drain.sh [--compact] [--ack-through SEQUENCE --recovery-generation GENERATION]
+#   --compact prints queue rows as sequence, kind, and source while preserving
+#   the full default rows and the generation-bound acknowledgement contract.
 #
 # Keep sequence-bound row consumption independent from generation-bound episode
 # retirement; docs/watcher-continuity.md owns the recovery contract.
@@ -16,6 +19,12 @@
 # locked drain rotates such leftovers away before doing anything else.
 # FM_STATUS_PRESENTATION_LOCK_TIMEOUT sets the positive whole-second wait for
 # presentation-path locks (default 10); queue mutation locks remain blocking.
+case "${1:-}" in
+  -h|--help)
+    sed -n 's/^# Usage: /Usage: /p; s/^#   /  /p' "$0" | head -n 2
+    exit 0
+    ;;
+esac
 set -u
 
 SCRIPT_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
@@ -43,6 +52,7 @@ RECOVERY_MARKER_TOKEN=
 RECOVERY_ACK_REQUIRED=false
 RECOVERY_ACK_MOVED=false
 ACK_THROUGH=
+COMPACT_OUTPUT=false
 ACK_GENERATION=
 ACK_REMOVED=0
 PRESENTED_MAX=0
@@ -217,19 +227,24 @@ presented_max_row() { # <rows-file>
   fi
 }
 
-case "${1:-}" in
-  '') ;;
-  --ack-through)
-    ACK_THROUGH=${2:-}
-    case "$ACK_THROUGH" in ''|*[!0-9]*) echo "wake drain: invalid acknowledgement sequence" >&2; exit 2 ;; esac
-    [ "${3:-}" = --recovery-generation ] \
-      || { echo "wake drain: acknowledgement requires its recovery generation" >&2; exit 2; }
-    ACK_GENERATION=${4:-}
-    case "$ACK_GENERATION" in ''|*[!A-Za-z0-9._-]*) echo "wake drain: invalid recovery generation" >&2; exit 2 ;; esac
-    [ "$#" -eq 4 ] || { echo "wake drain: unexpected acknowledgement arguments" >&2; exit 2; }
-    ;;
-  *) echo "usage: fm-wake-drain.sh [--ack-through SEQUENCE --recovery-generation GENERATION]" >&2; exit 2 ;;
-esac
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --compact)
+      COMPACT_OUTPUT=true
+      shift
+      ;;
+    --ack-through)
+      ACK_THROUGH=${2:-}
+      case "$ACK_THROUGH" in ''|*[!0-9]*) echo "wake drain: invalid acknowledgement sequence" >&2; exit 2 ;; esac
+      [ "${3:-}" = --recovery-generation ] \
+        || { echo "wake drain: acknowledgement requires its recovery generation" >&2; exit 2; }
+      ACK_GENERATION=${4:-}
+      case "$ACK_GENERATION" in ''|*[!A-Za-z0-9._-]*) echo "wake drain: invalid recovery generation" >&2; exit 2 ;; esac
+      shift 4
+      ;;
+    *) echo "usage: fm-wake-drain.sh [--compact] [--ack-through SEQUENCE --recovery-generation GENERATION]" >&2; exit 2 ;;
+  esac
+done
 
 [ "$ACTOR" != branch ] || require_branch_eligible_rows || exit 1
 
@@ -1059,7 +1074,12 @@ case "${FM_WAKE_DRAIN_TEST_DELAY_BEFORE_COMMIT:-0}" in
   *) sleep "$FM_WAKE_DRAIN_TEST_DELAY_BEFORE_COMMIT" ;;
 esac
 if [ -n "$RAW_ROWS" ]; then
-  printf '%s\n' "$RAW_ROWS" || exit "$?"
+  if [ "$COMPACT_OUTPUT" = true ]; then
+    printf 'seq kind source\n'
+    printf '%s\n' "$RAW_ROWS" | awk -F '\t' 'NF >= 5 { printf "%s %s %s\n", $2, $3, ($4 == "" ? "-" : $4) }' || exit "$?"
+  else
+    printf '%s\n' "$RAW_ROWS" || exit "$?"
+  fi
 fi
 fm_recovery_marker_snapshot "$RECOVERY_MARKER" || exit 1
 RECOVERY_MARKER_TOKEN=$FM_RECOVERY_MARKER_TOKEN
