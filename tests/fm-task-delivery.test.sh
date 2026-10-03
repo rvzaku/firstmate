@@ -79,7 +79,7 @@ run_legacy_relaunch() { # <home> <id> <project>
   fakebin="$home/legacy-bin"
   fm_git_init_commit "$wt"
   git -C "$wt" checkout -qb "fm/$id" || fail "could not prepare the legacy task branch"
-  mkdir -p "$fakebin"
+  mkdir -p "$fakebin" "$home/legacy-user-home"
   fm_write_meta "$home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" "backend=tmux" \
     "project=$proj" "worktree=$wt" "harness=claude" "kind=ship" \
@@ -98,7 +98,8 @@ case "${1:-}" in
 esac
 SH
   chmod +x "$fakebin/tmux"
-  FM_LEGACY_ID="$id" FM_LEGACY_WT="$wt" \
+  HOME="$home/legacy-user-home" CLAUDE_CONFIG_DIR='' \
+    FM_LEGACY_ID="$id" FM_LEGACY_WT="$wt" \
     run_spawn "$home" "$fakebin" "$id" --relaunch
 }
 
