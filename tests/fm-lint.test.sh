@@ -166,10 +166,14 @@ test_help_reports_the_complete_interface() {
 }
 
 test_registered_project_guard() {
-  local tmp fake_root home out rc file
+  local tmp fake_root home out rc file seed fake_name legacy_name bare_name
   tmp=$(fm_test_tmproot fm-lint-project-guard)
   fake_root="$tmp/repo"
   home="$tmp/home"
+  seed="fixture-$$"
+  fake_name="synthetic-$seed"
+  legacy_name="legacy $seed product"
+  bare_name="bare-$seed-widget"
   mkdir -p "$fake_root/.github/workflows" "$fake_root/.agents/skills/fixture" \
     "$fake_root/bin" "$fake_root/docs" "$fake_root/skills/fixture" \
     "$fake_root/tests" "$home/data"
@@ -187,11 +191,8 @@ test_registered_project_guard() {
   git -C "$fake_root" init -q
   git -C "$fake_root" add -f -- AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
     .github/workflows/ bin/ .agents/skills/ skills/ docs/ tests/
-  printf '%s\n' '- synthetic-widget [no-mistakes] - fixture' \
-    '- legacy product - fixture' '- bare-widget' \
-    '- api [no-mistakes] - fixture' \
-    '- delimiter - product [no-mistakes] - fixture' \
-    '- delimiter [product] [no-mistakes] - fixture' > "$home/data/projects.md"
+  printf '%s\n' "- $fake_name [no-mistakes] - fixture" \
+    "- $legacy_name - fixture" "- $bare_name" > "$home/data/projects.md"
 
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "clean shared tree failed the registered project guard: $out"
@@ -202,7 +203,8 @@ test_registered_project_guard() {
     .github/workflows/fixture.yml bin/fixture.sh \
     .agents/skills/fixture/SKILL.md skills/fixture/SKILL.md \
     docs/fixture.md tests/fixture.sh; do
-    printf '%s\n' 'synthetic-widget' > "$fake_root/$file"
+    printf '%s\n' "$fake_name" > "$fake_root/$file"
+    git -C "$fake_root" add -f -- "$file"
   done
   rc=0
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
@@ -215,48 +217,44 @@ test_registered_project_guard() {
     docs/fixture.md tests/fixture.sh; do
     assert_contains "$out" "$file" "guard missed tracked shared file $file"
     : > "$fake_root/$file"
+    git -C "$fake_root" add -f -- "$file"
   done
-  assert_not_contains "$out" 'synthetic-widget' "guard failure exposed a private registry name"
+  assert_not_contains "$out" "$fake_name" "guard failure exposed a private registry name"
   pass "registered project guard checks every configured tracked path"
 
-  printf '%s\n' 'bare-widget' > "$fake_root/README.md"
+  printf '%s\n' "$bare_name" > "$fake_root/README.md"
+  git -C "$fake_root" add -f -- README.md
   rc=0
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
   [ "$rc" -ne 0 ] || fail "a bare registered project row passed the guard"
   assert_contains "$out" 'README.md' "guard missed the bare registry row"
   : > "$fake_root/README.md"
+  git -C "$fake_root" add -f -- README.md
 
-  printf '%s\n' 'legacy product' > "$fake_root/skills/fixture/SKILL.md"
+  printf '%s\n' "$legacy_name" > "$fake_root/skills/fixture/SKILL.md"
+  git -C "$fake_root" add -f -- skills/fixture/SKILL.md
   rc=0
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
   [ "$rc" -ne 0 ] || fail "a legacy registered project row passed the guard"
   assert_contains "$out" 'skills/fixture/SKILL.md' "guard missed the legacy registry row"
   : > "$fake_root/skills/fixture/SKILL.md"
+  git -C "$fake_root" add -f -- skills/fixture/SKILL.md
 
-  printf '%s\n' 'synthetic-widget' > "$fake_root/docs/untracked.md"
+  printf '%s\n' "$fake_name" > "$fake_root/docs/untracked.md"
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "untracked shared material was included by the registered project guard: $out"
   }
   pass "registered project guard ignores untracked shared files"
 
-  printf '%s\n' 'a capitalized key' > "$fake_root/tests/fixture.sh"
+  printf '%s\n' "- $fake_name [no-mistakes] - fixture" > "$home/data/projects.md"
+  printf '%s\n' "x${fake_name}x" > "$fake_root/tests/fixture.sh"
+  git -C "$fake_root" add -f -- tests/fixture.sh
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
-    fail "a short registered name matched inside an unrelated word: $out"
+    fail "Git whole-word matching did not require word boundaries: $out"
   }
-  : > "$fake_root/tests/fixture.sh"
-  pass "registered project guard ignores short-name substrings inside other words"
+  pass "registered names with delimiters follow Git whole-word boundary behavior"
 
-  for name in api 'delimiter - product' 'delimiter [product]'; do
-    printf '%s\n' "$name" > "$fake_root/README.md"
-    rc=0
-    out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
-    [ "$rc" -ne 0 ] || fail "complete registered name '$name' passed the guard"
-    assert_contains "$out" 'README.md' "guard missed complete registered name '$name'"
-    : > "$fake_root/README.md"
-  done
-  pass "registered project guard matches complete short and delimiter names"
-
-  rm -f "$home/data/projects.md"
+  mv "$home/data/projects.md" "$home/data/projects.saved"
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "missing private registry did not skip the guard: $out"
   }

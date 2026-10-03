@@ -124,8 +124,7 @@ ROOT="$(cd "$SELF_DIR/.." && pwd -P)"
 cd "$ROOT" || exit 1
 
 fm_lint_registered_project_guard() {
-  local home registry name file found=0
-  local -a shared_files=()
+  local home registry name file found=0 matches rc
   home=${FM_HOME:-${FM_ROOT_OVERRIDE:-$ROOT}}
   registry=${FM_DATA_OVERRIDE:-$home/data}/projects.md
   [ -e "$registry" ] || return 0
@@ -133,26 +132,30 @@ fm_lint_registered_project_guard() {
     printf 'fm-lint.sh: cannot read the private project registry.\n' >&2
     return 1
   }
-  while IFS= read -r -d '' file; do
-    shared_files+=("$file")
-  done < <(git ls-files -z -- AGENTS.md README.md CONTRIBUTING.md .tasks.toml \
-    .github/workflows/ bin/ .agents/skills/ skills/ docs/ tests/)
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    for file in "${shared_files[@]}"; do
-      if grep -Fqw -- "$name" "$file" 2>/dev/null; then
-        printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
+    rc=0
+    matches=$(git grep -I -F -i -w -l -- "$name") || rc=$?
+    case "$rc" in
+      0)
+        while IFS= read -r file; do
+          [ -n "$file" ] || continue
+          printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$file" >&2
+        done <<< "$matches"
         found=1
-      fi
-    done
+        ;;
+      1) ;;
+      *)
+        printf 'fm-lint.sh: cannot inspect tracked files for the registered project guard.\n' >&2
+        return 1
+        ;;
+    esac
   done < <(awk '
     substr($0, 1, 2) == "- " {
       line = substr($0, 3)
-      for (i = 2; i <= length(line); i++) {
-        if (substr(line, i, 2) == " [" || substr(line, i, 3) == " - ") {
-          print substr(line, 1, i - 1)
-        }
-      }
+      boundary = index(line, " [")
+      if (!boundary) boundary = index(line, " - ")
+      if (boundary) line = substr(line, 1, boundary - 1)
       print line
     }
   ' "$registry")
