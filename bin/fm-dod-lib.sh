@@ -258,8 +258,15 @@ fm_brief_ship_intent_valid() {  # <file>
       value = $0
       sub(/^[[:space:]]*Intent check:[[:space:]]*/, "", value)
       if (value !~ /^(clear|grilled):[[:space:]]*[^[:space:]]/) next
+      kind = value
+      sub(/:.*/, "", kind)
       sub(/^(clear|grilled):[[:space:]]*/, "", value)
-      if (value ~ /[{}<>]/ || toupper(value) ~ /^(TODO|TBD|PLACEHOLDER)([[:space:].:]|$)/) next
+      if (value ~ /^[{<]/ || toupper(value) ~ /^(TODO|TBD|PLACEHOLDER)([[:space:].:]|$)/) next
+      if (kind == "grilled") {
+        if (!match(value, /Q:[[:space:]]*[^[:space:]]/)) next
+        rest = substr(value, RSTART + RLENGTH)
+        if (substr(value, RSTART + RLENGTH - 1, 2) == "A:" || rest !~ /A:[[:space:]]*[^[:space:]]/) next
+      }
       valid = 1
     }
     END { exit !(count == 1 && valid) }

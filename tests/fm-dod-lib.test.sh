@@ -417,13 +417,13 @@ EOF
 test_new_ship_brief_requires_intent_check() {
   local brief value
   brief="$TMP_ROOT/ship-intent-brief.md"
-  for value in '' 'clear:' 'grilled: ' 'unclear: ask later' 'clear: {reason}' 'grilled: <questions and answers>' 'clear: TBD'; do
+  for value in '' 'clear:' 'grilled: ' 'unclear: ask later' 'clear: {reason}' 'grilled: <questions and answers>' 'clear: TBD' 'grilled: done' 'grilled: Q: Which scope?' 'grilled: Q: A: Only scope' 'grilled: A: only scope Q: which?'; do
     printf '# Task\n## Firstmate spec\nIntent check: %s\n' "$value" > "$brief"
     if fm_brief_ship_intent_valid "$brief"; then fail "unfinished intent check was accepted: $value"; fi
   done
   printf '# Task\n## Firstmate spec\nObservable result: visible outcome\n' > "$brief"
   if fm_brief_ship_intent_valid "$brief"; then fail "missing intent check was accepted"; fi
-  for value in 'clear: the request defines the outcome and scope.' 'grilled: Q: Which scope? A: Only the intake gate.'; do
+  for value in 'clear: the request defines the outcome and scope.' 'clear: emit <READY> after setup' 'grilled: Q: Which scope? A: Only the intake gate.'; do
     printf '# Task\n## Firstmate spec\nIntent check: %s\n' "$value" > "$brief"
     fm_brief_ship_intent_valid "$brief" || fail "completed intent check was refused: $value"
   done
