@@ -1,0 +1,7 @@
+[grilled: done] REFUSE
+[grilled: Q: which users?] REFUSE
+[grilled: Q: which users? A: signed-in only] PASS
+[clear: emit <READY>] PASS
+[clear: {x}] REFUSE
+[clear: TODO] REFUSE
+[] REFUSE
