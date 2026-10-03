@@ -403,6 +403,7 @@ $description
 
 ## Firstmate spec
 Verify projected workspace behavior for $id.
+Intent check: clear: the fixture defines the expected launch behavior.
 Observable result: the expected workspace state for $id is visible.
 Verification command: run the Herdr presentation end-to-end test.
 EOF

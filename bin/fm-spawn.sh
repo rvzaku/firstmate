@@ -3068,6 +3068,10 @@ if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
     echo "error: new ship brief $BRIEF must state an Observable result and either a Verification command or an explicit Verification limit in ## Firstmate spec" >&2
     exit 1
   fi
+  if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ] && ! fm_brief_ship_intent_valid "$BRIEF"; then
+    echo "error: new ship brief $BRIEF must state Intent check: clear: <one-line reason> or Intent check: grilled: <recorded questions and answers> in ## Firstmate spec; resolve unclear intent and replace placeholders before spawn" >&2
+    exit 1
+  fi
   if ADDRESS_LINE=$(fm_brief_intent_address_line "$BRIEF"); then
     echo "error: $BRIEF ## Captain's intent has an operator-address line: $ADDRESS_LINE; write the captain's actual words without a Captain label or address before spawn, since the heading already records provenance" >&2
     exit 1

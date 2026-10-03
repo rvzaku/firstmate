@@ -14,6 +14,10 @@
 # charters still use a single `{TASK}` charter fill. Firstmate may adjust other
 # sections when the task genuinely deviates (e.g. working an existing external
 # PR instead of shipping a new one).
+# A new ship's Firstmate spec requires one Intent check: line: clear: followed
+# by a one-line reason, or grilled: followed by the recorded questions and
+# answers after clarifying unclear intent. Empty values and placeholders fail
+# spawn validation; scouts and relaunches of existing tasks are exempt.
 # A ship's Firstmate spec must state an observable result and the
 # project's verification command, or state an explicit verification limitation.
 # Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--branch-prefix <prefix>] [--forge <none|gerrit> [--shape squash]] [--herdr-lab]
@@ -536,6 +540,7 @@ IFS= read -r -d '' TASK_SECTION <<'EOF' || true
 ## Firstmate spec
 {FIRSTMATE_SPEC}
 
+Intent check: {clear: one-line reason, or grilled: recorded questions and answers}
 Observable result: {state the visible or otherwise observable outcome}
 Verification command: {project command, or replace this line with Verification limit: and state the limitation}
 

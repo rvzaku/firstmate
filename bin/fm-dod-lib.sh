@@ -249,6 +249,23 @@ fm_brief_task_content_valid() {  # <file>
   [ -n "$(printf '%s' "$task" | tr -d '[:space:]')" ]
 }
 
+fm_brief_ship_intent_valid() {  # <file>
+  local spec
+  spec=$(fm_brief_task_heading_body "$1" "## Firstmate spec") || return 1
+  printf '%s\n' "$spec" | awk '
+    /^[[:space:]]*Intent check:/ {
+      count++
+      value = $0
+      sub(/^[[:space:]]*Intent check:[[:space:]]*/, "", value)
+      if (value !~ /^(clear|grilled):[[:space:]]*[^[:space:]]/) next
+      sub(/^(clear|grilled):[[:space:]]*/, "", value)
+      if (value ~ /[{}<>]/ || toupper(value) ~ /^(TODO|TBD|PLACEHOLDER)([[:space:].:]|$)/) next
+      valid = 1
+    }
+    END { exit !(count == 1 && valid) }
+  '
+}
+
 # A new ship brief states its observable result and verification path.
 fm_brief_ship_verification_valid() {  # <file>
   local spec
