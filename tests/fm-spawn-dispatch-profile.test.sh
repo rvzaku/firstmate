@@ -1684,7 +1684,7 @@ test_worker_launch_delivers_role_scope() {
       content=$(cat "$brief")
       content=${content//'{TASK}'/brief for $id}
       content=${content//'{FIRSTMATE_SPEC}'/Exercise the spawn behavior under test.}
-      content=${content//'{clear: one-line reason, or grilled: recorded questions and answers}'/clear: the fixture defines the expected launch behavior.}
+      content=${content//'{clear: one-line reason, or grilled: Q: question A: answer}'/clear: the fixture defines the expected launch behavior.}
       content=${content//'{state the visible or otherwise observable outcome}'/the expected worker launch is visible.}
       content=${content//'{project command, or replace this line with Verification limit: and state the limitation}'/run the focused spawn fixture test.}
       printf '%s\n' "$content" > "$brief"
