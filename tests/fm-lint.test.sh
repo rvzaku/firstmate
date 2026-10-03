@@ -240,6 +240,31 @@ test_registered_project_guard() {
   : > "$fake_root/skills/fixture/SKILL.md"
   git -C "$fake_root" add -f -- skills/fixture/SKILL.md
 
+  mkdir -p "$fake_root/docs/linked"
+  printf '%s\n' "$fake_name" > "$fake_root/docs/linked/note.md"
+  ln -s linked "$fake_root/docs/dirlink"
+  git -C "$fake_root" add -f -- docs/
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a registered name in files behind a tracked directory symlink passed the guard"
+  assert_contains "$out" 'docs/linked/note.md' "guard missed files behind a tracked directory symlink"
+  git -C "$fake_root" rm -q -f --cached -r -- docs/linked docs/dirlink
+  rm -rf "$fake_root/docs/linked" "$fake_root/docs/dirlink"
+
+  ln -s "target-${fake_name}-x" "$fake_root/docs/namelink"
+  git -C "$fake_root" add -f -- docs/namelink
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a registered name in a tracked symlink target passed the guard"
+  assert_contains "$out" 'docs/namelink' "guard missed a tracked symlink target"
+  ln -sf "target-x${fake_name}x" "$fake_root/docs/namelink"
+  git -C "$fake_root" add -f -- docs/namelink
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
+    fail "a non-boundary name inside a symlink target failed the guard: $out"
+  }
+  git -C "$fake_root" rm -q -f --cached -- docs/namelink
+  rm -f "$fake_root/docs/namelink"
+
   printf '%s\n' "$fake_name" > "$fake_root/docs/untracked.md"
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {
     fail "untracked shared material was included by the registered project guard: $out"
@@ -253,6 +278,19 @@ test_registered_project_guard() {
     fail "Git whole-word matching did not require word boundaries: $out"
   }
   pass "registered names with delimiters follow Git whole-word boundary behavior"
+
+  printf '%s\n' "- ab - $seed [no-mistakes] - fixture" "- q$$" > "$home/data/projects.md"
+  printf '%s\n' "ab - $seed" > "$fake_root/tests/fixture.sh"
+  git -C "$fake_root" add -f -- tests/fixture.sh
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a registered name containing a registry delimiter passed the guard"
+  printf '%s\n' "see q$$ here" > "$fake_root/tests/fixture.sh"
+  git -C "$fake_root" add -f -- tests/fixture.sh
+  rc=0
+  out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a short registered name passed the guard"
+  pass "registered project guard matches short names and names containing delimiters"
 
   mv "$home/data/projects.md" "$home/data/projects.saved"
   out=$(CI=true FM_HOME="$home" "$fake_root/bin/fm-lint.sh" --list-files 2>&1) || {

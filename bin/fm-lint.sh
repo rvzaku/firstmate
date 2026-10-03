@@ -124,7 +124,8 @@ ROOT="$(cd "$SELF_DIR/.." && pwd -P)"
 cd "$ROOT" || exit 1
 
 fm_lint_registered_project_guard() {
-  local home registry name file found=0 matches rc
+  local home registry name file found=0 matches rc entry path target
+  local -a links=()
   home=${FM_HOME:-${FM_ROOT_OVERRIDE:-$ROOT}}
   registry=${FM_DATA_OVERRIDE:-$home/data}/projects.md
   [ -e "$registry" ] || return 0
@@ -132,8 +133,21 @@ fm_lint_registered_project_guard() {
     printf 'fm-lint.sh: cannot read the private project registry.\n' >&2
     return 1
   }
+  while IFS= read -r -d '' entry; do
+    if [ "${entry:0:6}" = 120000 ]; then links+=("${entry#*$'\t'}"); fi
+  done < <(git ls-files -s -z)
   while IFS= read -r name; do
     [ -n "$name" ] || continue
+    for path in ${links[@]+"${links[@]}"}; do
+      target=$(git cat-file blob ":$path") || {
+        printf 'fm-lint.sh: cannot inspect tracked files for the registered project guard.\n' >&2
+        return 1
+      }
+      if printf '%s\n' "$target" | grep -q -F -i -w -- "$name"; then
+        printf 'fm-lint.sh: a registered project name appears in shared tracked material: %s\n' "$path" >&2
+        found=1
+      fi
+    done
     rc=0
     matches=$(git grep -I -F -i -w -l -- "$name") || rc=$?
     case "$rc" in
@@ -153,10 +167,10 @@ fm_lint_registered_project_guard() {
   done < <(awk '
     substr($0, 1, 2) == "- " {
       line = substr($0, 3)
-      boundary = index(line, " [")
-      if (!boundary) boundary = index(line, " - ")
-      if (boundary) line = substr(line, 1, boundary - 1)
       print line
+      for (i = 1; i < length(line); i++) {
+        if (substr(line, i, 2) == " [" || substr(line, i, 3) == " - ") print substr(line, 1, i - 1)
+      }
     }
   ' "$registry")
   [ "$found" -eq 0 ]
