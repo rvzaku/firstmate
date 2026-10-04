@@ -552,6 +552,7 @@ ensure_spawn_status_file() {
     echo "error: task status file could not be created: $status_file" >&2
     return 1
   fi
+  fm_wake_status_mark_current "$STATE" "$status_file" || true
 }
 # shellcheck source=bin/fm-config-inherit-lib.sh
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
