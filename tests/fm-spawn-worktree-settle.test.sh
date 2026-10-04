@@ -228,9 +228,22 @@ test_primary_checkout_that_never_settles_fails_at_the_deadline() {
   pass "a pane stuck on the primary checkout fails loudly at the deadline"
 }
 
+repo_shape() {
+  git -C "$ROOT" config --get core.bare || true
+  git -C "$ROOT" worktree list --porcelain
+}
+
+test_tests_leave_the_invoking_repository_untouched() {
+  [ "$REPO_SHAPE_BEFORE" = "$(repo_shape)" ] \
+    || fail "the tests changed core.bare or the worktree list of the invoking repository"
+  pass "the invoking repository's core.bare and worktree list are unchanged"
+}
+
+REPO_SHAPE_BEFORE=$(repo_shape)
 test_single_stale_first_read_is_not_accepted
 test_already_settled_pane_costs_one_confirm_read
 test_transient_primary_checkout_is_not_accepted
 test_primary_checkout_that_never_settles_fails_at_the_deadline
+test_tests_leave_the_invoking_repository_untouched
 
 echo "# all fm-spawn-worktree-settle tests passed"
