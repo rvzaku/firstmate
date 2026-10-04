@@ -3886,7 +3886,7 @@ test_zero_positive_validation_refuses() {
 
 test_positive_validation_receipts() {
   local case_dir head variant
-  for variant in receipt receipt-skipped receipt-missing stale wrong-task wrong-generation failed skipped-test pipeline pipeline-ci pipeline-other-head pipeline-other-branch receipt-waiver receipt-red; do
+  for variant in receipt receipt-skipped receipt-missing stale wrong-task wrong-generation failed skipped-test pipeline pipeline-ci pipeline-running pipeline-skipped pipeline-failed pipeline-failed-step pipeline-other-head pipeline-other-branch receipt-waiver receipt-red; do
     case_dir=$(make_case "receipt-$variant")
     head=$(git -C "$case_dir/wt" rev-parse HEAD)
     add_gh_mocks "$case_dir" "$head"
@@ -3914,15 +3914,25 @@ run:
   id: run-positive
   branch: fm/task-x1
   head: $head
-  status: completed
-outcome: passed-with-skips
-steps[1]{step,status,findings,duration_ms}:
+  status: running
+steps[9]{step,status,findings,duration_ms}:
+  intent,completed,0,1
+  rebase,completed,0,1
+  review,completed,0,1
   test,completed,0,100
+  document,completed,0,1
+  lint,completed,0,1
+  push,completed,0,1
+  pr,completed,0,10
+  ci,running,0,0
 EOF
 SH
         case "$variant" in
           skipped-test) sed -i.bak 's/test,completed/test,skipped/' "$case_dir/fakebin/no-mistakes" ;;
-          pipeline-ci) sed -i.bak -e 's/status: completed/status: ci/' -e '/outcome:/d' "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-ci) sed -i.bak -e 's/status: running/status: ci/' "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-skipped) sed -i.bak -e 's/status: running/status: completed/' -e 's/ci,running/ci,skipped/' "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-failed) sed -i.bak -e 's/status: running/status: failed/' "$case_dir/fakebin/no-mistakes"; echo 'outcome: failed' >> "$case_dir/fakebin/no-mistakes" ;;
+          pipeline-failed-step) sed -i.bak 's/ci,running/ci,failed/' "$case_dir/fakebin/no-mistakes" ;;
           pipeline-other-head) sed -i.bak "s/head: $head/head: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/" "$case_dir/fakebin/no-mistakes" ;;
           pipeline-other-branch) sed -i.bak 's/branch: fm\/task-x1/branch: fm\/other/' "$case_dir/fakebin/no-mistakes" ;;
         esac
@@ -3935,7 +3945,7 @@ SH
       *) run_required_case "$case_dir" 121 ;;
     esac
     case "$variant" in
-      receipt|receipt-skipped|receipt-missing|receipt-waiver|pipeline|pipeline-ci)
+      receipt|receipt-skipped|receipt-missing|receipt-waiver|pipeline|pipeline-ci|pipeline-running|pipeline-skipped)
         expect_code 0 "$RC" "$variant should merge: $(cat "$case_dir/stderr")"
         assert_logged_gh_merge "$case_dir" 121 example/repo --squash
         assert_grep 'source:' "$case_dir/stderr" "$variant must name the evidence source"
