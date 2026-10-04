@@ -5,8 +5,8 @@
 # and source (the validation command or pipeline run). It is trusted operator
 # evidence, not a waiver of red or missing required checks. Head and task
 # incarnation must match exactly. A no-mistakes task can also supply its current
-# branch-bound run through axi status: Test must be completed, with outcome
-# passed, passed-with-skips, passed-with-override, or status ci awaiting merge.
+# branch-bound run through axi status: Test and PR must be completed, with no
+# failed step, and CI must be completed, running, pending, or skipped.
 # That evidence is recorded as the task receipt before landing, including the
 # pipeline run source. Skipped Test never supplies positive validation.
 
@@ -43,16 +43,19 @@ fm_validation_receipt() { # <state> <id> <meta> <verified-head>
   status=$(fm_nm_strip_quotes "$(fm_nm_field "$out" status)")
   case "$outcome" in
     passed|passed-with-skips|passed-with-override) ;;
-    '') [ "$status" = ci ] || return 1 ;;
+    '') case "$status" in running|completed|ci) ;; *) return 1 ;; esac ;;
     *) return 1 ;;
   esac
   printf '%s\n' "$out" | awk '
     /^[[:space:]]*steps\[[0-9]+\]\{step,status,/ { in_steps=1; next }
-    in_steps && /^[[:space:]]*test,completed,/ { found++; next }
+    in_steps && /^[[:space:]]*test,/ { test++; if ($0 ~ /^[[:space:]]*test,completed,/) test_ok++ ; next }
+    in_steps && /^[[:space:]]*pr,/ { pr++; if ($0 ~ /^[[:space:]]*pr,completed,/) pr_ok++ ; next }
+    in_steps && /^[[:space:]]*ci,/ { ci++; if ($0 ~ /^[[:space:]]*ci,(completed|running|pending|skipped),/) ci_ok++ ; next }
+    in_steps && /^[[:space:]]*[a-z_-]+,failed,/ { failed++ ; next }
     in_steps && /^[^[:space:]]/ { in_steps=0 }
-    END { exit (found != 1) }
+    END { exit (test != 1 || test_ok != 1 || pr != 1 || pr_ok != 1 || ci != 1 || ci_ok != 1 || failed != 0) }
   ' || return 1
-  source="no-mistakes run $run_id (Test completed; ${outcome:-ci})"
+  source="no-mistakes run $run_id (Test and PR completed; CI ${status})"
   tmp=$(mktemp "$state/.validation-$id.XXXXXX") || return 1
   if ! jq -n --arg id "$id" --arg gen "$gen" --arg head "$head" --arg source "$source" \
       '{task_id:$id, spawn_gen:$gen, head:$head, result:"passed", scope:"changed-surface", source:$source}' \
