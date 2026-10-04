@@ -21,7 +21,8 @@
 #
 # With --best-effort, a failure is appended to the bounded home-local
 # state/.home-summary-refresh.log when available, with stderr as the bounded
-# fallback, and the command exits zero. Session start, watcher, spawn, and
+# fallback, and enqueues one durable failure wake per episode. A successful
+# publication clears the episode. The command exits zero. Session start, watcher, spawn, and
 # teardown use that mode so this side-band publication can never change their
 # result. Without it, failures are printed and returned to the direct caller
 # for tests and diagnostics.
@@ -182,6 +183,9 @@ home_summary_refresh_once() {
     return 1
   fi
   HOME_SUMMARY_TMP=
+  fm_lock_acquire_wait "$STATE/.home-summary-failure.lock" || return 1
+  rm -f "$STATE/.home-summary-failure"
+  fm_lock_release "$STATE/.home-summary-failure.lock" || return 1
   fm_lock_release "$REFRESH_LOCK"
   HOME_SUMMARY_LOCK_HELD=0
   trap - EXIT HUP INT TERM
@@ -190,6 +194,14 @@ home_summary_refresh_once() {
 
 home_summary_log_failure() {
   local size stamp tmp
+  if fm_lock_acquire_wait "$STATE/.home-summary-failure.lock"; then
+    if [ ! -e "$STATE/.home-summary-failure" ]; then
+      if fm_wake_append check home-summary-refresh "check: home-summary refresh failed: $HOME_SUMMARY_ERROR; prior summary remains stale until a successful publication"; then
+        touch "$STATE/.home-summary-failure"
+      fi
+    fi
+    fm_lock_release "$STATE/.home-summary-failure.lock" || true
+  fi
   stamp=$HOME_SUMMARY_FAILURE_STAMP
   [ -n "$stamp" ] || stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   if ! printf '[%s] %s\n' "$stamp" "$HOME_SUMMARY_ERROR" >> "$ERROR_LOG" 2>/dev/null; then

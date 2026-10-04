@@ -88,6 +88,16 @@ count=0
 [ ! -f "$QUOTA_AXI_COUNT" ] || read -r count < "$QUOTA_AXI_COUNT"
 count=$((count + 1))
 printf '%s\n' "$count" > "$QUOTA_AXI_COUNT"
+if [ "${QUOTA_AXI_RECOVERY:-0}" = 1 ]; then
+  if [ "$count" -eq 2 ]; then
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"unknown","effectiveAvailability":[]}}]}\n'
+  else
+    remaining=0
+    [ "$count" -lt 3 ] || remaining=50
+    printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":%s,"runway":{"status":"through_reset"}}]}}]}\n' "$remaining"
+  fi
+  exit 0
+fi
 if [ "${QUOTA_AXI_UNKNOWN_FIRST:-0}" = 1 ] && [ "$count" -eq 1 ]; then
   printf '{"schemaVersion":5,"providers":[{"provider":"codex","quotaSemantics":{"status":"unknown","effectiveAvailability":[]}}]}\n'
   exit 0
@@ -123,9 +133,7 @@ chmod +x "$FAKEBIN/quota-axi"
 fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 ok() { printf 'ok - %s\n' "$1"; }
 
-if help=$("$BIN/fm-procevent-quota.sh" --help 2>&1); then
-  fail "help unexpectedly exited zero"
-fi
+help=$("$BIN/fm-procevent-quota.sh" --help 2>&1) || fail "help exited nonzero"
 printf '%s\n' "$help" | grep -Fq 'fm-procevent-quota.sh retire [--provider <provider>]' \
   || fail "help omitted the retire usage"
 if printf '%s\n' "$help" | grep -Fq 'set -u'; then
@@ -161,6 +169,17 @@ printf '%s\n' "$out" | grep -qx 'status: exhausted' \
   || fail "unknown headroom with exhausted runway did not wake as exhausted"
 ok "poll detects exhausted runway under unknown headroom"
 
+rm -f "$COUNT"
+out=$(QUOTA_AXI_RECOVERY=1 QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" \
+  "$BIN/fm-procevent-quota.sh" poll --direction recovery --provider codex --threshold 10 --interval 0.01 --timeout 1)
+printf '%s\n' "$out" | grep -qx 'quota: quota-codex-recovery' || fail "recovery reused depletion identity"
+printf '%s\n' "$out" | grep -qx 'status: recovered' || fail "recovery did not wake"
+printf '%s\n' "$out" | grep -qx 'condition_polls: 3' || fail "unknown quota was treated as recovered"
+printf '%s\n' "$out" | grep -q '^action: re-evaluate authorized pending work' || fail "recovery wake omitted dispatch direction"
+printf '%s\n' "$out" > "$LAB/recovered.result"
+[ "$("$BIN/fm-procevent-quota.sh" classify "$LAB/recovered.result")" = recovered ] || fail "recovery classification failed"
+"$BIN/fm-procevent-quota.sh" terminal "$LAB/recovered.result" || fail "recovery was not terminal"
+ok "explicit recovery waits wake on known recovered headroom, preserve uncertainty, and direct ready-work intake"
 rm -f "$COUNT"
 out=$(QUOTA_AXI_COUNT="$COUNT" PATH="$FAKEBIN:$PATH" "$BIN/fm-procevent-quota.sh" poll --interval 0.01 --threshold 10 --provider '' --timeout 1)
 printf '%s\n' "$out" | grep -qx 'status: exhausted' || fail "aggregate watch did not report exhaustion"

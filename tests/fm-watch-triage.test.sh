@@ -25,6 +25,111 @@ set -u
 WATCH="$ROOT/bin/fm-watch.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
 
+test_recurring_check_outcomes() {
+  local dir state pid mode code finished
+  dir=$(make_case recurring-outcomes); state="$dir/state"
+  printf 'read -r mode < "%s/mode"\nexit "\044mode"\n' "$dir" > "$state/fixture.check.sh"
+  chmod 0700 "$state/fixture.check.sh"
+  printf '7\n' > "$dir/mode"
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "registration failed"
+  watch_bg "$state" "$dir/fakebin" "$dir/failure.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+  pid=$!
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "silent nonzero check produced no failure wake"; }
+  grep -F 'check: recurring check failed: fixture' "$dir/failure.out" >/dev/null || fail "failure wake missing"
+  jq -e '.exit_status == 7 and .timed_out == false and .finished >= .started and .next_due > .finished' "$state/fixture.check-result.json" >/dev/null || fail "check outcome missing"
+  finished=$(jq -r '.finished' "$state/fixture.check-result.json")
+  ack_stopped_cycle "$state" || fail "could not acknowledge failure"
+  watch_bg "$state" "$dir/fakebin" "$dir/repeat.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+  pid=$!
+  wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "unchanged failure woke twice"; }
+  mode=0
+  while ! jq -e --argjson finished "$finished" '.exit_status == 7 and .finished > $finished' "$state/fixture.check-result.json" >/dev/null && [ "$mode" -lt 100 ]; do
+    sleep 0.1
+    mode=$((mode + 1))
+  done
+  [ "$mode" -lt 100 ] || { reap "$pid"; fail "unchanged failed check was not rerun"; }
+  wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "rerun failure produced a second wake"; }
+  [ ! -s "$dir/repeat.out" ] || fail "unchanged failure printed a wake"
+  reap "$pid"
+  for code in a b; do
+    printf 'echo diagnostic-%s\nexit 7\n' "$code" > "$state/fixture.check.sh"
+    FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "diagnostic registration failed"
+    watch_bg "$state" "$dir/fakebin" "$dir/diagnostic-$code.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+    pid=$!
+    wait_for_exit "$pid" 100 || { reap "$pid"; fail "failure diagnostic $code did not wake within one episode"; }
+    grep -F "output: diagnostic-$code" "$dir/diagnostic-$code.out" >/dev/null || fail "failure wake lost diagnostic $code: $(cat "$dir/diagnostic-$code.out")"
+    ack_stopped_cycle "$state" || fail "could not acknowledge diagnostic $code"
+  done
+  watch_bg "$state" "$dir/fakebin" "$dir/repeat.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+  pid=$!
+  printf 'exit 0\n' > "$state/fixture.check.sh"
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "recovery registration failed"
+  mode=0
+  while [ -e "$state/.check-failure-fixture" ] && [ "$mode" -lt 100 ]; do sleep 0.1; mode=$((mode + 1)); done
+  [ ! -e "$state/.check-failure-fixture" ] || fail "recovery did not clear episode"
+  [ ! -s "$dir/repeat.out" ] || fail "successful quiet check woke"
+  reap "$pid"
+  printf 'sleep 30\n' > "$state/fixture.check.sh"
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "timeout registration failed"
+  watch_bg "$state" "$dir/fakebin" "$dir/timeout.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1 FM_CHECK_TIMEOUT=2
+  pid=$!
+  wait_for_exit "$pid" 150 || { reap "$pid"; fail "timed-out check produced no wake"; }
+  jq -e '(.exit_status == 124 or .exit_status == 137) and .timed_out == true' "$state/fixture.check-result.json" >/dev/null || fail "timeout outcome missing: $(cat "$state/fixture.check-result.json") wake=$(cat "$dir/timeout.out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge timeout"
+  for code in 124 137; do
+    printf 'exit 0\n' > "$state/fixture.check.sh"
+    FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "recovery registration failed"
+    watch_bg "$state" "$dir/fakebin" "$dir/recovery-$code.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1
+    pid=$!
+    wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "quiet recovery woke"; }
+    reap "$pid"
+    printf 'exit %s\n' "$code" > "$state/fixture.check.sh"
+    FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-check-register.sh" fixture >/dev/null || fail "exit registration failed"
+    watch_bg "$state" "$dir/fakebin" "$dir/exit-$code.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_CHECK_INTERVAL=1 FM_CHECK_FORCE_FALLBACK=1
+    pid=$!
+    wait_for_exit "$pid" 100 || { reap "$pid"; fail "explicit exit $code did not wake"; }
+    jq -e --argjson code "$code" '.exit_status == $code and .timed_out == false' "$state/fixture.check-result.json" >/dev/null || fail "explicit exit $code was classified as timeout"
+    ack_stopped_cycle "$state" || fail "could not acknowledge explicit exit"
+  done
+  pass "silent failures and timeouts wake once per episode, while quiet recovery clears the episode"
+}
+
+test_backlog_ready_work_wakes() {
+  local dir state pid i
+  command -v tasks-axi >/dev/null 2>&1 || { echo 'skip: tasks-axi unavailable (ready-work wake)'; return; }
+  dir=$(make_case ready-work); state="$dir/state"
+  mkdir -p "$dir/data" "$dir/config"
+  cp "$ROOT/.tasks.toml" "$dir/.tasks.toml"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$dir/data/backlog.md"
+  FM_HOME="$dir" "$ROOT/bin/fm-tasks-axi.sh" add eligible 'Ready, quoted "task"' --kind ship >/dev/null || fail "could not add ready task"
+  watch_bg "$state" "$dir/fakebin" "$dir/ready.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_HOME="$dir" FM_READY_INTERVAL=1 FM_READY_DISPATCH_DELAY=300
+  pid=$!
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "queue-only ready task did not wake"; }
+  grep -F 'check: ready-work newly eligible: eligible' "$dir/ready.out" >/dev/null || fail "ready wake did not name task"
+  grep -F 'quota unknown until intake' "$dir/ready.out" >/dev/null || fail "ready wake invented quota"
+  ack_stopped_cycle "$state" || fail "could not acknowledge ready-work wake"
+  watch_bg "$state" "$dir/fakebin" "$dir/repeat.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_HOME="$dir" FM_READY_INTERVAL=1 FM_READY_DISPATCH_DELAY=300
+  pid=$!
+  wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "ready-work wake repeated"; }
+  reap "$pid"
+  printf '%s new\n' "$(( $(date +%s) - 400 ))" > "$state/.ready-work-eligible"
+  watch_bg "$state" "$dir/fakebin" "$dir/overdue.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_HOME="$dir" FM_READY_INTERVAL=1 FM_READY_DISPATCH_DELAY=300
+  pid=$!
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "overdue ready work did not wake"; }
+  grep -F 'overdue beyond 300s: eligible' "$dir/overdue.out" >/dev/null || fail "overdue wake missing delay"
+  ack_stopped_cycle "$state" || fail "could not acknowledge overdue wake"
+  FM_HOME="$dir" "$ROOT/bin/fm-tasks-axi.sh" hold eligible --reason 'wait for date' --kind future --until 2099-01-01 >/dev/null || fail "could not defer task"
+  watch_bg "$state" "$dir/fakebin" "$dir/deferred.out" env FM_WATCH_HANDLING_SUCCESSOR=1 FM_HOME="$dir" FM_READY_INTERVAL=1
+  pid=$!
+  wait_poll_cycle "$state" "$pid" || { reap "$pid"; fail "future time gate woke early"; }
+  FM_HOME="$dir" "$ROOT/bin/fm-tasks-axi.sh" hold eligible --reason 'wait for date' --kind future --until 2000-01-01 >/dev/null || fail "could not expire date gate"
+  wait_for_exit "$pid" 100 || { reap "$pid"; fail "expired time gate did not wake"; }
+  grep -F 'newly eligible: eligible' "$dir/deferred.out" >/dev/null || fail "expired gate wake missing"
+  i=$(grep -c 'ready-work' "$state/.wake-queue")
+  [ "$i" -eq 1 ] || fail "expired gate produced $i wakes"
+  pass "queue-only readiness wakes once on eligibility and once beyond the dispatch delay"
+}
+
 TMP_ROOT=$(fm_test_tmproot fm-watch-triage-tests)
 
 ack_stopped_cycle() {  # <state>
@@ -6610,6 +6715,8 @@ if [ -n "${FM_TEST_ONLY:-}" ]; then
   exit 0
 fi
 
+test_recurring_check_outcomes
+test_backlog_ready_work_wakes
 test_status_span_actionable_classifier
 test_status_span_survives_a_later_routine_append
 test_status_span_respects_decision_closure
