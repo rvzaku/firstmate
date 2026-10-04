@@ -49,6 +49,7 @@ Exercise the fleet ledger for $TASK.
 
 ## Firstmate spec
 Nothing to build.
+Intent check: clear: the fixture defines the expected lifecycle record.
 Observable result: The lifecycle emits the expected ledger entries.
 Verification command: tests/fm-fleet-ledger.test.sh
 EOF

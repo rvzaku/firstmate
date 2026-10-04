@@ -98,6 +98,9 @@ Exercise an Orca-backed spawn for $id.
 
 ## Firstmate spec
 Confirm the launch enters the worktree Orca created for it.
+Intent check: clear: the fixture defines the expected Orca worktree behavior.
+Observable result: the launch enters the worktree created for the task.
+Verification command: run tests/fm-spawn-orca-worktree.test.sh.
 EOF
   fb=$(make_orca_fakebin "$case_dir")
 

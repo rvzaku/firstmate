@@ -1033,6 +1033,9 @@ Exercise an ordinary crew launch.
 
 ## Firstmate spec
 Verify secondmate harness settings do not affect it.
+Intent check: clear: the fixture defines the expected crew launch behavior.
+Observable result: the crew launch uses its resolved harness settings.
+Verification command: run tests/fm-secondmate-harness.test.sh.
 EOF
   : > "$launchlog"
   PATH="$fakebin:$BASE_PATH" TMUX="fake,1,0" CLAUDECODE=1 \

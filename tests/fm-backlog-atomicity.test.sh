@@ -84,6 +84,9 @@ Exercise backlog dispatch for $id.
 
 ## Firstmate spec
 Verify the atomic backlog transition.
+Intent check: clear: the fixture defines the expected backlog transition.
+Observable result: the backlog item moves to In flight when spawn succeeds.
+Verification command: run tests/fm-backlog-atomicity.test.sh.
 
 # Definition of done
 Delivery contract: mode=no-mistakes
