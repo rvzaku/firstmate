@@ -1,0 +1,5 @@
+$ bash tests/fm-captain-reminder.test.sh
+ok - captain reminder appends one idempotent keyed signal for a repeated instruction
+ok - captain reminder ignores failed-task retries and skips bad signal lines
+ok - captain reminder ignores unrelated instructions
+exit=0

@@ -1,0 +1,24 @@
+$ bin/fm-lab-home.sh create /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf
+/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf
+(exit status: 0)
+$ env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf bin/fm-brief.sh live-reminder-a 01M4888MDY534RCXCFRS0NWMQJ --mode local-only
+scaffolded: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/data/live-reminder-a/brief.md (ship, mode=local-only; replace {SCOPE_PATHS}, {TASK}, and {FIRSTMATE_SPEC})
+(exit status: 0)
+$ env -u NO_MISTAKES_GATE -u FM_GATE_REFUSE_BYPASS -u FM_ROOT_OVERRIDE -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE -u FM_CONFIG_OVERRIDE -u FM_PROJECTS_OVERRIDE FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf bin/fm-spawn.sh live-reminder-a /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ --mode local-only --yolo off --backend tmux --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf
+workflow dispatch gate refused: task-token-budget: limit 400000, reading 999999999; quota-reserve: limit 30, reading 0
+Land outstanding work, wait for capacity or quota to recover, lower the task token budget, and supply any missing readings before retrying.
+error: adjust the reported limit and fix; workflow limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/projects/workflow/registry/; budget-controlled limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/projects/workflow/registry/budgets.md
+(exit status: 1)
+$ env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf bin/fm-brief.sh live-reminder-b 01M4888MDY534RCXCFRS0NWMQJ --mode local-only
+scaffolded: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/data/live-reminder-b/brief.md (ship, mode=local-only; replace {SCOPE_PATHS}, {TASK}, and {FIRSTMATE_SPEC})
+(exit status: 0)
+$ env -u NO_MISTAKES_GATE -u FM_GATE_REFUSE_BYPASS -u FM_ROOT_OVERRIDE -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE -u FM_CONFIG_OVERRIDE -u FM_PROJECTS_OVERRIDE FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf bin/fm-spawn.sh live-reminder-b /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ --mode local-only --yolo off --backend tmux --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf
+workflow dispatch gate refused: task-token-budget: limit 400000, reading 999999999; quota-reserve: limit 30, reading 0
+Land outstanding work, wait for capacity or quota to recover, lower the task token budget, and supply any missing readings before retrying.
+error: adjust the reported limit and fix; workflow limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/projects/workflow/registry/; budget-controlled limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-reminder-live.vcwi2wrf/projects/workflow/registry/budgets.md
+(exit status: 1)
+$ jq -c . data/captain-reminders.jsonl
+{"key":"captain-reminder:live-reminder-b:e37ab42954f8e00b","class":"mistakes","first_seen":"2026-10-06T10:42:17+00:00","count":2,"instruction_summary":"Automate this repeated routine so the captain does not need to remind Firstmate again.","ladder_level_hint":"automation"}
+Observed: the repeated captain instruction was recorded by fm-spawn before both over-budget workers were refused; no worker metadata was created.

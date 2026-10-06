@@ -1,0 +1,34 @@
+$ printf '%s' '{"last_assistant_message": "Done.", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+completion claim has no linked evidence; include a PR URL recorded for this task or a check result before ending the turn
+(exit status: 2)
+Observed: unsupported completion claim blocked turn end with actionable evidence warning.
+$ printf '%s' '{"last_assistant_message": "I will report when it is done.", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+(exit status: 0)
+Observed: future completion promise passed without a warning.
+$ printf '%s' '{"last_assistant_message": "Validation passed; I completed the implementation.", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+(exit status: 0)
+Observed: completion with a check result passed.
+$ printf '%s' '{"last_assistant_message": "task-42 completed the implementation. https://github.com/acme/project/pull/42", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  TURN WOULD END BLIND - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher holds this home lock (last beat: never).
+●  repair missing watcher supervision with a foreground checkpoint: bin/fm-watch-checkpoint.sh --seconds 180.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(exit status: 2)
+Observed: the named task PR passed completion evidence; the separate existing watcher guard still blocked because the lab has an in-flight task and no watcher.
+$ printf '%s' '{"last_assistant_message": "Merged https://github.com/acme/project/pull/42 for task-42", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+(exit status: 0)
+Observed: the completed backlog row kept the task-linked PR evidence valid after live meta teardown.
+$ printf '%s' '{"last_assistant_message": "Merged https://github.com/acme/project/pull/42 for task-99", "stop_hook_active": false, "session_id": "plain-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh
+completion claim has no linked evidence; include a PR URL recorded for this task or a check result before ending the turn
+(exit status: 2)
+Observed: the same recorded PR did not validate a different named task.
+$ printf '%s' '{"last_assistant_message": "Done.", "stop_hook_active": true, "session_id": "claude-completion-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh --claude
+completion claim has no linked evidence; include a PR URL recorded for this task or a check result before ending the turn
+(exit status: 2)
+$ printf '%s' '{"last_assistant_message": "Understood - the change is finished.", "stop_hook_active": true, "session_id": "claude-completion-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh --claude
+(exit status: 0)
+$ printf '%s' '{"last_assistant_message": "Done.", "stop_hook_active": false, "session_id": "claude-completion-session"}' | env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi FM_ROOT_OVERRIDE=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-guard-live._ma1wzdi bash /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/bin/fm-turnend-guard.sh --claude
+completion claim has no linked evidence; include a PR URL recorded for this task or a check result before ending the turn
+(exit status: 2)
+Observed: Claude continuation only passes after this completion warning, and a fresh turn warns again.

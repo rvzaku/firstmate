@@ -1,0 +1,13 @@
+$ FM_TEST_WORKFLOW_ROOT=/Users/rvzaku/firstmate/projects/workflow bash tests/fm-spawn-worktree-settle.test.sh
+ok - a single transient stale pane_current_path read is not accepted as the worktree
+ok - an already-settled pane confirms on the next read, not a whole extra cycle
+ok - fm-spawn proceeds only on a valid gate pass and refuses malformed or failed results
+ok - workflow dispatch refusal is unconditional and actionable
+ok - fm-spawn passes the brief token budget, or the workflow registry limit without one
+ok - fm-spawn feeds the real workflow gate the registry default or the brief budget, and stops on a missing limit
+ok - fm-spawn refuses to dispatch when the workflow gate is missing
+ok - fm-spawn counts finished ship tasks awaiting landing as unlanded
+ok - fm-spawn continues when the captain reminder cannot be recorded
+ok - a transient primary-checkout pane read is not accepted as the worktree
+ok - a pane stuck on the primary checkout fails loudly at the deadline
+# all fm-spawn-worktree-settle tests passed

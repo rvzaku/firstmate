@@ -1,0 +1,13 @@
+$ bin/fm-lab-home.sh create /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b
+/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b
+(exit status: 0)
+$ env FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b bin/fm-brief.sh live-budget-default-01 01M4888MDY534RCXCFRS0NWMQJ --mode local-only
+scaffolded: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b/data/live-budget-default-01/brief.md (ship, mode=local-only; replace {SCOPE_PATHS}, {TASK}, and {FIRSTMATE_SPEC})
+(exit status: 0)
+$ env -u NO_MISTAKES_GATE -u FM_GATE_REFUSE_BYPASS -u FM_ROOT_OVERRIDE -u FM_STATE_OVERRIDE -u FM_DATA_OVERRIDE -u FM_CONFIG_OVERRIDE -u FM_PROJECTS_OVERRIDE FM_HOME=/Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b bin/fm-spawn.sh live-budget-default-01 /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ --mode local-only --yolo off --backend tmux --harness codex
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b
+workflow dispatch gate refused: quota-reserve: limit 30, reading 0
+Land outstanding work, wait for capacity or quota to recover, lower the task token budget, and supply any missing readings before retrying.
+error: adjust the reported limit and fix; workflow limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b/projects/workflow/registry/; budget-controlled limits: /Users/rvzaku/.no-mistakes/worktrees/d9bf58bd65e8/01M4888MDY534RCXCFRS0NWMQJ/.fm-default-budget._iuzpd3b/projects/workflow/registry/budgets.md
+(exit status: 1)
+Observed: the omitted-budget ship reached the real workflow gate; it refused because the live quota reading was below reserve, not because the registry budget was unreadable or over limit, and no worker record was created.
